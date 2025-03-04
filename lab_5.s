@@ -2,6 +2,8 @@
 
 	.global prompt
 	.global mydata
+	.global flag
+
 
 prompt:	.string "Your prompt with instructions is place here", 0
 mydata:	.byte	0x20	; This is where you can store data.
@@ -9,6 +11,7 @@ mydata:	.byte	0x20	; This is where you can store data.
 			; (initialized to 0x20 in this case) at the label
 			; mydata.  Halfwords & Words can be stored using the
 			; directives .half & .word
+flag: .word	0x00
 
 	.text
 
@@ -26,16 +29,22 @@ mydata:	.byte	0x20	; This is where you can store data.
 
 ptr_to_prompt:		.word prompt
 ptr_to_mydata:		.word mydata
+ptr_to_flag: 		.word flag
 
 lab5:				; This is your main routine which is called from
 				; your C wrapper.
 	PUSH {r4-r12,lr}   	; Preserve registers to adhere to the AAPCS
 	ldr r4, ptr_to_prompt
 	ldr r5, ptr_to_mydata
+	ldr r6, ptr_to_flag
 
  	bl uart_init
 	bl uart_interrupt_init
 	bl gpio_interrupt_init
+
+	MOV r0, #0x0
+	MOV r1, r6
+	STR r0, [r6]
 
 Infin:
 
@@ -163,5 +172,216 @@ gpio_interrupt_init:
     ORR r1,r1,#0x40000000
 
     STR r1, [r0,#0x100]
+
+	MOV pc, lr
+
+
+UART0_Handler:
+
+    ; Your code for your UART handler goes here.
+    ; Remember to preserver registers r4-r12 by pushing then popping
+    ; them to & from the stack at the beginning & end of the handler
+    PUSH{r4-r12, lr}
+
+    ;CURRENTLY Were storing the "flag" in r0, (should we store it in memory?????)
+    ;r0- flag (changed to be char for read character)
+    ;r1- address to flag
+    ;r4- will be flag after read char
+
+    ;Clear the interrupt
+    MOV r2, #0xC000
+    MOVT r2, #0x4000
+    LDR r3, [r2, #0x044]
+
+    ORR r3, #0x10
+
+    STR r3, [r2, #0x044]
+
+
+    ;Handle Interrupt
+    ldr r1, ptr_to_flag
+    LDR r0, [r1]
+
+    MOV r4, r0 ;temporarily store flag in r4
+    BL simple_read_character  ;stores current char in r0
+
+    ;r0- char
+    ;r4- flag
+    ;r1- address of flag
+
+    ;What does the flag tell us to do? (ie, flag determines how we respond)
+    CMP r4, #0x00
+    BEQ UartFlag0   ;Flag 0
+    CMP r4, #0x01
+    BEQ UartFlag1   ;Flag 1
+    CMP r4, #0x02
+    BEQ UartFlag2   ;Flag 2
+    CMP r4, #0x05
+    BEQ UartFlag5   ;Flag 5
+    B UartEnd       ;Else, whatever the flag is, we dont touch it
+
+
+
+UartFlag0:
+    ;flag is 0 (waiting for game start)
+    ;DId user input "G"???
+    CMP r0, #'G'
+    BNE UartEnd     ;If user didnt input G to start, we dont do anything
+    ;If we made it here, user input G, game will start
+    MOV r0, #0x1    ;set flag to 1 (start game polling)
+    STR r0, [r1]	;store flag in memory
+    B UartEnd
+
+
+
+
+UartFlag1:
+    ;flag is 1 (Game Polling)
+    ;DId user input " " (space)???
+    CMP r0, #' '
+    BNE UartEnd     ;If user didnt input a space, we dont do anything
+    ;If we made it here, user input a space, pushed too early
+    MOV r0, #0x3    ;set flag to 3 (uart pushed too early)
+    STR r0, [r1]	;store flag in memory
+    B UartEnd
+
+
+UartFlag2:
+    ;flag is 2 (SW1 Pushed too early, game still polling)
+    ;DId user input " " (space)???
+    CMP r0, #' '
+    BNE UartEnd     ;If user didnt input a space, we dont do anything
+    ;If we made it here, user input a space, BOTH pushed too early
+    MOV r0, #0x4    ;set flag to 4 (BOTH pushed too early)
+    STR r0, [r1]	;store flag in memory
+    B UartEnd
+
+
+
+UartFlag5:
+    ;flag is 5 The Light is Green, No winners yet!!!!)
+    ;DId user input " " (space)???
+    CMP r0, #' '
+    BNE UartEnd     ;If user didnt input a space, we dont do anything
+    ;If we made it here, user input a space, Uart Wins!!!!!
+    MOV r0, #0x7    ;set flag to 7 (UART/ Putty Wins!!!!)
+    STR r0, [r1]	;store flag in memory
+    B UartEnd
+
+
+UartEnd:
+
+    POP{r4-r12, lr}
+
+    BX lr           ; Return
+
+
+Switch_Handler:
+
+    ; Your code for your UART handler goes here.
+    ; Remember to preserver registers r4-r12 by pushing then popping
+    ; them to & from the stack at the beginning & end of the handler
+    PUSH{r4-r12, lr}
+
+    ;CURRENTLY Were storing the "flag" in r0, (should we store it in memory?????)
+    ;r0- flag (changed to be char for read character)
+    ;r1- address to flag
+    ;r4- will be flag after read char
+
+    ;Clear the interrupt
+    MOV r2, #0x5000
+    MOVT r2, #0x4002
+    LDR r3, [r2, #0x041C]
+
+    ORR r3, #0x10
+
+    STR r3, [r2, #0x041C]
+
+
+    ;Handle Interrupt
+    ldr r1, ptr_to_flag
+    LDR r0, [r1]
+
+
+
+    ;r0- flag
+    ;r1- address of flag
+
+    ;What does the flag tell us to do? (ie, flag determines how we respond)
+    ;1,3,5
+    CMP r0, #0x01
+    BEQ SwitchFlag1   ;Flag 1
+    CMP r0, #0x03
+    BEQ SwitchFlag3   ;Flag 3
+    CMP r0, #0x05
+    BEQ SwitchFlag5   ;Flag 5
+    B SwitchEnd       ;Else, whatever the flag is, we dont touch it
+
+
+SwitchFlag1:
+    ;flag is 1 (Game Polling)
+    ;If we made it here, user input a space, pushed too early
+    MOV r0, #0x2    ;set flag to 2 (switch pushed too early)
+    STR r0, [r1]	;store flag in memory
+    B SwitchEnd
+
+
+SwitchFlag3:
+    ;flag is 3 (Uart/Putty Pushed too early, game still polling)
+    ;If we made it here, user input a space, BOTH pushed too early
+    MOV r0, #0x4    ;set flag to 4 (BOTH pushed too early)
+    STR r0, [r1]	;store flag in memory
+    B SwitchEnd
+
+
+
+SwitchFlag5:
+    ;flag is 5 The Light is Green, No winners yet!!!!)
+    ;If we made it here, user input a space, Uart Wins!!!!!
+    MOV r0, #0x6    ;set flag to 6 (Switch Wins!!!)
+    STR r0, [r1]	;store flag in memory
+    B SwitchEnd
+
+
+SwitchEnd:
+
+    POP{r4-r12, lr}
+
+    BX lr           ; Return
+
+
+Timer_Handler:
+
+	; Your code for your Timer handler goes here.  It is not needed for
+	; Lab #5, but will be used in Lab #6.  It is referenced here because
+	; the interrupt enabled startup code has declared Timer_Handler.
+	; This will allow you to not have to redownload startup code for
+	; Lab #6.  Instead, you can use the same startup code as for Lab #5.
+	; Remember to preserver registers r4-r12 by pushing then popping
+	; them to & from the stack at the beginning & end of the handler.
+
+	BX lr       	; Return
+
+
+simple_read_character:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+    MOV r4, #0xC000     ;UART base address
+    MOVT r4, #0x4000
+    LDRB r5, [r4, #0x18] ;Load from memory
+    LDRB r0, [r4]       ;Store in r0
+
+	POP {r4-r12,lr}   ; Restore registers from stack
+
+	MOV pc, lr	; Return
+
+
+
+
+
+
+
+	.end
+
 
 
