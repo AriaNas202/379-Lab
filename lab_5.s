@@ -5,7 +5,15 @@
 	.global flag
 
 
-prompt:	.string "Your prompt with instructions is place here", 0
+prompt:	.string "Press 'G' to begin the game!", 0
+prompt1: .string "Wait for green light to start", 0
+prompt2: .string "GO!!!!", 0
+prompt3: .string "Tiva has won: ", 0
+prompt4: .string "Putty has won: ", 0
+prompt5: .string "Total games played: ", 0
+numberCount: .string "Number goes here", 0
+
+
 mydata:	.byte	0x20	; This is where you can store data.
 			; The .byte assembler directive stores a byte
 			; (initialized to 0x20 in this case) at the label
@@ -26,35 +34,205 @@ flag: .word	0x00
 	.global output_string		; This is from your Lab #4 Library
 	.global uart_init		; This is from your Lab #4 Library
 	.global lab5
+	.global gpio_btn_and_LED_init   ; Also from lab #4 library
+	.global illuminate_RGB_LED
+	.global int2string
 
 ptr_to_prompt:		.word prompt
 ptr_to_mydata:		.word mydata
 ptr_to_flag: 		.word flag
+ptr_to_prompt1:		.word prompt1
+ptr_to_prompt2:		.word prompt2
+ptr_to_prompt3:		.word prompt3
+ptr_to_prompt4:		.word prompt4
+ptr_to_prompt5:		.word prompt5
+ptr_to_numberCount:	.word numberCount
+
+
 
 lab5:				; This is your main routine which is called from
 				; your C wrapper.
 	PUSH {r4-r12,lr}   	; Preserve registers to adhere to the AAPCS
-	ldr r4, ptr_to_prompt
 	ldr r5, ptr_to_mydata
 	ldr r6, ptr_to_flag
+	ldr r4, ptr_to_prompt
+	;r8- Game counter
+	;r9- Putty
+	;r10- Sw1
 
+	MOV r8, #0x0
+	MOV r9, #0x0
+	MOV r10, #0x0
+
+ 	; INITIALIZATION
  	bl uart_init
 	bl uart_interrupt_init
 	bl gpio_interrupt_init
+	bl gpio_btn_and_LED_init
 
+
+	; Removing the light
+	MOV r0, #0x7
+	bl illuminate_RGB_LED
+
+	; Setting the flag
 	MOV r0, #0x0
-	MOV r1, r6
 	STR r0, [r6]
 
-Infin:
+	; Printing prompt
+	MOV r0, r4
+	bl output_string
 
-	ADD r3,r3,#0x0
-	B Infin
+Waiting:
+	;waiting for game to start
+	ldr r0, [r6]
+	CMP r0, #0x1
+	BNE Waiting
+
+
+
+	;Game start
+	;Clear the screen
+	MOV r0, #0xC
+	bl output_character
+	ldr r0, ptr_to_prompt1
+	bl output_string
+
+
+
+
+;Waiting a few seconds
+
+
+	MOV r7, #0x0
+Infin:
+	ADD r7, r7, #0x1
+
+	CMP r7, #0x500000
+	BNE Infin
+
+
+
+
+
+	;TOO EARLY HANDLING SKIPED FOR NOW
+
+
+	;Green Light, Game START!!!
+
+	;set flag to 5
+	MOV r0, #0x5
+	STR r0, [r6]
+
+	;LED Turn Green
+	MOV r0, #3
+	BL illuminate_RGB_LED
+
+	;prompt user (GO!)
+	;Clear the screen
+	MOV r0, #0xC
+	bl output_character
+	ldr r0, ptr_to_prompt2
+	bl output_string
+
+
+Winner:
+	LDR r7, [r6] ;get flag
+	CMP r7, #6
+	BEQ WinSw
+	CMP r7, #7
+	BEQ PuttyWin
+	B Winner
+
+WinSw:
+	MOV r0, #2;Turn light blue
+	bl illuminate_RGB_LED
+	ADD r10, r10, #0x1
+	ADD r8, r8, #0x1
+	B QuitGame
+
+
+PuttyWin:
+	MOV r0, #5;Turn light blue
+	bl illuminate_RGB_LED
+	ADD r9, r9, #0x1
+	ADD r8, r8, #0x1
+	B QuitGame
+
+
+
+
+
+QuitGame:
+	;User quit the game
+	MOV r0, #0xC
+	bl output_character
+
+	;Print Tiva Wins
+	ldr r11, ptr_to_prompt3
+	MOV r0, r11
+	bl output_string
+
+	; Convert number count int to a string
+	ldr r0, ptr_to_numberCount
+	MOV r1, r10
+	bl int2string
+	ldr r0, ptr_to_numberCount
+	bl output_string
+	;Newline for readablility
+	MOV r0, #0xA
+	bl output_character
+	MOV r0, #0xD
+	bl output_character
+
+
+	;Print Putty Wins
+	ldr r11, ptr_to_prompt4
+	MOV r0, r11
+	bl output_string
+
+	; Convert number count int to a string
+	ldr r0, ptr_to_numberCount
+	MOV r1, r9
+	bl int2string
+	ldr r0, ptr_to_numberCount
+	bl output_string
+	;Newline for readablility
+	MOV r0, #0xA
+	bl output_character
+	MOV r0, #0xD
+	bl output_character
+
+
+	;Print Game Counter
+	ldr r11, ptr_to_prompt5
+	MOV r0, r11
+	bl output_string
+
+	; Convert number count int to a string
+	ldr r0, ptr_to_numberCount
+	MOV r1, r8
+	bl int2string
+	ldr r0, ptr_to_numberCount
+	bl output_string
+	;Newline for readablility
+	MOV r0, #0xA
+	bl output_character
+	MOV r0, #0xD
+	bl output_character
+
+
+
+
+
+
+
+
 
 	; This is where you should implement a loop, waiting for the user to
 	; indicate if they want to end the program.
 
-	POP {lr}		; Restore registers to adhere to the AAPCS
+	POP {r4-r12,lr}		; Restore registers to adhere to the AAPCS
 	MOV pc, lr
 
 
@@ -382,6 +560,3 @@ simple_read_character:
 
 
 	.end
-
-
-
