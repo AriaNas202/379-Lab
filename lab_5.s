@@ -12,6 +12,7 @@ prompt3: .string "Tiva has won: ", 0
 prompt4: .string "Putty has won: ", 0
 prompt5: .string "Total games played: ", 0
 numberCount: .string "Number goes here", 0
+prompt6: .string "Would you like to play again? (Y/N) " , 0
 
 
 mydata:	.byte	0x20	; This is where you can store data.
@@ -38,15 +39,16 @@ flag: .word	0x00
 	.global illuminate_RGB_LED
 	.global int2string
 
-ptr_to_prompt:		.word prompt
-ptr_to_mydata:		.word mydata
-ptr_to_flag: 		.word flag
-ptr_to_prompt1:		.word prompt1
-ptr_to_prompt2:		.word prompt2
-ptr_to_prompt3:		.word prompt3
-ptr_to_prompt4:		.word prompt4
-ptr_to_prompt5:		.word prompt5
-ptr_to_numberCount:	.word numberCount
+ptr_to_prompt:			.word prompt
+ptr_to_mydata:			.word mydata
+ptr_to_flag: 			.word flag
+ptr_to_prompt1:			.word prompt1
+ptr_to_prompt2:			.word prompt2
+ptr_to_prompt3:			.word prompt3
+ptr_to_prompt4:			.word prompt4
+ptr_to_prompt5:			.word prompt5
+ptr_to_numberCount:		.word numberCount
+ptr_to_prompt6:			.word prompt6
 
 
 
@@ -69,6 +71,8 @@ lab5:				; This is your main routine which is called from
 	bl uart_interrupt_init
 	bl gpio_interrupt_init
 	bl gpio_btn_and_LED_init
+
+replayGame:
 
 
 	; Removing the light
@@ -112,12 +116,39 @@ Infin:
 	BNE Infin
 
 
+	;TOO EARLY HANDLING
+	LDR r11, [r6]	;load flag into r11
+	CMP r11, #0x4
+	BEQ BothTooEarly
+	
+	CMP r11, #0x2
+	BE
+	
+	CMP r11, #0x3
+	
+	B GreenLightGo
+
+
+BothTooEarly:
+	;turn light red
+	MOV r0, #0x1
+	bl illuminate_RGB_LED
+	;Increment game counter
+	ADD r8, r8, #1
+	;branch to "Continue?"
+	B PlayAgain
+
+
+
+
+
+
 
 
 
 	;TOO EARLY HANDLING SKIPED FOR NOW
 
-
+GreenLightGo:
 	;Green Light, Game START!!!
 
 	;set flag to 5
@@ -149,7 +180,7 @@ WinSw:
 	bl illuminate_RGB_LED
 	ADD r10, r10, #0x1
 	ADD r8, r8, #0x1
-	B QuitGame
+	B PlayAgain
 
 
 PuttyWin:
@@ -157,12 +188,50 @@ PuttyWin:
 	bl illuminate_RGB_LED
 	ADD r9, r9, #0x1
 	ADD r8, r8, #0x1
-	B QuitGame
+	B PlayAgain
+
+
+
+
+	;Print prompt asking user if they want to play again
+PlayAgain:
+	ldr r11, ptr_to_prompt6
+	MOV r0, r11
+	bl output_string
+	;set flag to 8
+	MOV r11, #0x8
+	STR r11, [r6]
+
+
+replayyyWaiting:
+	;wait for flsg to NOT be 8
+	;get flag
+	LDR r11, [r6]
+
+	;if flag 9, quit
+	;if flag 0, go back to start
+	CMP r11, #0x0
+	BEQ replayGame
+	CMP r11, #0x9
+	BEQ QuitGame
+	B replayyyWaiting
+
+
+
+
+	;read user input
+	;bl simple_read_character
+	;CMP r0, #'Y'
+	;BEQ replayyyWaiting
+	;CMP r0, #'N'
+	;BEQ UserQuit           ; DO SOMETHINGGGGGG
+	;B PlayAgain
 
 
 
 
 
+	;Print counter/games played and wins
 QuitGame:
 	;User quit the game
 	MOV r0, #0xC
@@ -228,6 +297,8 @@ QuitGame:
 
 
 
+
+UserQuit:
 
 	; This is where you should implement a loop, waiting for the user to
 	; indicate if they want to end the program.
@@ -396,6 +467,8 @@ UART0_Handler:
     BEQ UartFlag2   ;Flag 2
     CMP r4, #0x05
     BEQ UartFlag5   ;Flag 5
+    CMP r4, #0x08
+    BEQ UartFlag8   ;Flag 8
     B UartEnd       ;Else, whatever the flag is, we dont touch it
 
 
@@ -444,6 +517,25 @@ UartFlag5:
     ;If we made it here, user input a space, Uart Wins!!!!!
     MOV r0, #0x7    ;set flag to 7 (UART/ Putty Wins!!!!)
     STR r0, [r1]	;store flag in memory
+    B UartEnd
+
+UartFlag8:
+
+
+    CMP r0, #'Y'
+    BEQ SetFlagContinue
+    CMP r0, #'N'
+    BEQ SetFlagQuit
+    B UartEnd
+
+SetFlagContinue:
+	MOV r0, #0x0
+    STR r0, [r1]
+    B UartEnd
+
+SetFlagQuit:
+    MOV r0, #0x9
+    STR r0, [r1]
     B UartEnd
 
 
