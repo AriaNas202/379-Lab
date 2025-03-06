@@ -79,6 +79,9 @@ replayGame:
 	MOV r0, #0x7
 	bl illuminate_RGB_LED
 
+	MOV r0, #0xC
+	bl output_character		;clear screen for readability
+
 	; Setting the flag
 	MOV r0, #0x0
 	STR r0, [r6]
@@ -120,12 +123,13 @@ Infin:
 	LDR r11, [r6]	;load flag into r11
 	CMP r11, #0x4
 	BEQ BothTooEarly
-	
+
 	CMP r11, #0x2
-	BE
-	
+	BEQ TivaTooEarly
+
 	CMP r11, #0x3
-	
+	BEQ PuttyTooEarly
+
 	B GreenLightGo
 
 
@@ -138,6 +142,76 @@ BothTooEarly:
 	;branch to "Continue?"
 	B PlayAgain
 
+TivaTooEarly:
+	;Turn LED Green
+	MOV r0, #0x3
+	bl illuminate_RGB_LED
+
+	;Wait for the flag to be 4 (Waiting for Putty to push)
+WaitForPutty:
+	LDR r11, [r6]
+	CMP r11, #0x4
+	BNE WaitForPutty
+
+	;if we made it here, putty hit the button
+	;turn LED red
+	MOV r0, #0x1
+	bl illuminate_RGB_LED
+	;flash red (indicate Tiva loss)
+	MOV r7, #0x0
+FlashRedTivaLoss:
+	ADD r7, r7, #0x1
+
+	CMP r7, #0x400000
+	BNE FlashRedTivaLoss
+
+	;turn Yellow (Putty Win)
+	MOV r0, #0x05
+	bl illuminate_RGB_LED
+
+	;Increment Game Counter
+	ADD r8,r8, #1
+	;Increment Putty Win
+	ADD r9,r9,#1
+	;Branch to continue
+	B PlayAgain
+
+
+
+
+PuttyTooEarly:
+	;Turn LED Green
+	MOV r0, #0x3
+	bl illuminate_RGB_LED
+
+	;Wait for the flag to be 4 (Waiting for Tiva to push)
+WaitForTiva:
+	LDR r11, [r6]
+	CMP r11, #0x4
+	BNE WaitForTiva
+
+	;if we made it here, Tiva hit the button
+	;turn LED red
+	MOV r0, #0x1
+	bl illuminate_RGB_LED
+	;flash red (indicate Putty loss)
+	MOV r7, #0x0
+FlashRedPuttyLoss:
+	ADD r7, r7, #0x1
+
+	CMP r7, #0x400000
+	BNE FlashRedPuttyLoss
+
+	;turn Blue (Tiva Win)
+	MOV r0, #0x02
+	bl illuminate_RGB_LED
+
+	;Increment Game Counter
+	ADD r8,r8, #1
+	;Increment Tiva Win
+	ADD r10,r10,#1
+	;Branch to continue
+	B PlayAgain
 
 
 
@@ -145,8 +219,6 @@ BothTooEarly:
 
 
 
-
-	;TOO EARLY HANDLING SKIPED FOR NOW
 
 GreenLightGo:
 	;Green Light, Game START!!!
@@ -195,6 +267,9 @@ PuttyWin:
 
 	;Print prompt asking user if they want to play again
 PlayAgain:
+	MOV r0, #0xC
+	bl output_character		;clear screen for readability
+
 	ldr r11, ptr_to_prompt6
 	MOV r0, r11
 	bl output_string
