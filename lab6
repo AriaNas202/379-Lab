@@ -34,7 +34,7 @@ board:
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
-    .string "^^^^^^^^^^^^^^^^^^^^^^", 0x0
+    .string "^^^^^^^^^^^^^^^^^^^^^^", 0xA, 0xD, 0x0
 
 
 prompt:	.string "Your prompt with instructions is place here", 0
@@ -89,42 +89,18 @@ lab6:				; This is your main routine which is called from
 	ldr r0, ptr_to_board
 	bl output_string
 
-;test:
-	;B test
+Infin:
+	ldr r4, ptr_to_flagLoss
+	ldr r4, [r4] ;loss flag in r4
 
-	;set x
-	ldr r5, ptr_to_flagX
-	MOV r6, #0xB
-	STR r6, [r5]
+	CMP r4, #1
+	BEQ EndGame
+	B Infin
 
-	;set y
-	ldr r7, ptr_to_flagY
-	MOV r8, #0xB
-	STR r8, [r7]
+EndGame:
 
-	;load char to print
-	MOV r0, #0x23
 
-	bl addBoard
 
-		;set x
-	ldr r5, ptr_to_flagX
-	MOV r6, #0x9
-	STR r6, [r5]
-
-	;set y
-	ldr r7, ptr_to_flagY
-	MOV r8, #0x9
-	STR r8, [r7]
-
-	;load char to print
-	MOV r0, #0x23
-
-	bl addBoard
-
-	;prints BOARD (AGAIN)
-	ldr r0, ptr_to_board
-	bl output_string
 
 
 
@@ -423,7 +399,123 @@ Timer_Handler:
 	; Lab #6.  Instead, you can use the same startup code as for Lab #5.
 	; Remember to preserver registers r4-r12 by pushing then popping
 	; them to & from the stack at the beginning & end of the handler.
+	PUSH {r4-r12,lr} ; Spill registers to stack
 
+	MOV r0, #0x0000
+	MOVT r0, #0x4003
+
+	LDRB r1, [r0, #0x24]
+
+	ORR r1, r1, #0x1
+
+	STRB r1, [r0, #0x24]
+
+	;get Board
+	ldr r4, ptr_to_board
+
+	;get x
+	ldr r5, ptr_to_flagX
+	LDR r5, [r5]
+
+	;get y
+	ldr r6, ptr_to_flagY
+	LDR r6, [r6]
+
+	;increment board address to current char
+	ADD r4, r4, r5 ;add x
+	MOV r7, #24 ;move 24 into r7
+	MUL r6,r6,r7  ;multiply y coordinate by 24 (24 chars per line)
+	ADD r4, r4, r6 ;add y
+
+	;Get the direction
+	ldr r8, ptr_to_flagDirection
+	LDR r8, [r8]
+
+	;write x to the current position
+	MOV r0, #0x58
+	bl addBoard
+
+	;Get score
+	ldr r9, ptr_to_flagScore
+	LDR r10, [r9]
+
+	;Increment score
+	ADD r10, r10, #1
+
+	STR r10, [r9]
+
+	;Is direction going up?
+	CMP r8, #0
+	BEQ GoUp
+
+	;Is direction going left?
+	CMP r8, #1
+	BEQ GoLeft
+
+	;Is direction going down?
+	CMP r8, #2
+	BEQ GoDown
+
+	;If we made it here direction is going right
+	b GoRight
+
+	;Increment according to direction
+GoUp:
+	SUB r6, r6, #1
+	LDR r9, ptr_to_flagY
+
+	STR r6, [r9]
+	b IsValid
+
+GoLeft:
+	SUB r5, r5, #1
+	LDR r9, ptr_to_flagX
+
+	STR r5, [r9]
+	b IsValid
+
+GoDown:
+	ADD r6, r6, #1
+	LDR r9, ptr_to_flagY
+
+	STR r6, [r9]
+	b IsValid
+
+GoRight:
+	ADD r5, r5, #1
+	LDR r9, ptr_to_flagX
+
+	STR r5, [r9]
+
+IsValid:
+	bl readBoard
+
+	CMP r0, #' '     ;Is the char a space, if yes it is valid, go to YesValid
+	BEQ YesValid
+
+	LDR r9, ptr_to_flagLoss		;If we made it here, char is not equal to space so they lost
+
+	MOV r10, #1
+
+	STR r10, [r9]		;Store 1 to Loss Flag
+
+	B EndTimeHandler
+
+YesValid:
+	MOV r0, #'*'
+	bl addBoard			;Print curser in new location
+
+
+EndTimeHandler:
+
+	MOV r0, #0xC			;clear the screen
+	bl output_character
+
+	ldr r0, ptr_to_board
+	bl output_string
+
+
+	POP {r4-r12,lr}   ; Restore registers from stack
 	BX lr       	; Return
 
 
@@ -476,6 +568,34 @@ addBoard:
 
 	MOV pc, lr	; Return
 
+readBoard:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+	;argument r0- char to write
+
+
+	;get Board
+	ldr r4, ptr_to_board
+
+	;get x
+	ldr r5, ptr_to_flagX
+	LDR r5, [r5]
+
+	;get y
+	ldr r6, ptr_to_flagY
+	LDR r6, [r6]
+
+	;increment board address to current char
+	ADD r4, r4, r5 ;add x
+	MOV r7, #24 ;move 24 into r7
+	MUL r6,r6,r7  ;multiply y coordinate by 24 (24 chars per line)
+	ADD r4, r4, r6 ;add y
+
+	;r4 at base address of current char
+	LDRB r0, [r4] ; store single byte of r0,
+
+	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
 
 
 	.end
