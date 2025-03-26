@@ -13,7 +13,7 @@
 
 board:
 
-    .string "^^^^^^^^^^^^^^^^^^^^^^", 0xA, 0xD
+    .string "----------------------", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
@@ -34,7 +34,7 @@ board:
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
-    .string "^^^^^^^^^^^^^^^^^^^^^^", 0xA, 0xD, 0x0
+    .string "----------------------", 0xA, 0xD, 0x0
 
 
 prompt:	.string "Your prompt with instructions is place here", 0
