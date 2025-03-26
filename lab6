@@ -9,11 +9,15 @@
 	.global flagX
 	.global flagY
 	.global board
+	.global GameOverText
+	.global stringScore
+	.global int2string
 
 
 board:
 
-    .string "----------------------", 0xA, 0xD
+	;.string "", 0xA, 0xD
+    .string "^^^^^^^^^^^^^^^^^^^^^^", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
@@ -34,7 +38,15 @@ board:
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
     .string "|                    |", 0xA, 0xD
-    .string "----------------------", 0xA, 0xD, 0x0
+    .string "^^^^^^^^^^^^^^^^^^^^^^", 0xA, 0xD
+
+   	.string "Score: ", 0x0
+
+GameOverText:
+	.string "", 0xA, 0xD
+	.string "Game Over!", 0xA, 0xD, 0x0
+
+
 
 
 prompt:	.string "Your prompt with instructions is place here", 0
@@ -49,6 +61,7 @@ flagScore: .word		0x00
 flagLoss: .word			0x00
 flagX: .word		0xA
 flagY: .word		0xA
+stringScore:  .string   "Number Goes Here", 0x0
 
 	.text
 
@@ -73,6 +86,8 @@ ptr_to_flagLoss:	.word flagLoss
 ptr_to_flagX:		.word flagX
 ptr_to_flagY:		.word flagY
 ptr_to_board:		.word board
+ptr_to_gameOver:		.word GameOverText
+ptr_to_stringScore:		.word stringScore
 
 lab6:				; This is your main routine which is called from
 				; your C wrapper.
@@ -99,12 +114,16 @@ Infin:
 
 EndGame:
 
+	;print game over
+	ldr r0, ptr_to_gameOver
+	bl output_string
 
 
 
 
 
-	POP {lr}		; Restore registers to adhere to the AAPCS
+
+	POP {r4-r12,lr}		; Restore registers to adhere to the AAPCS
 	MOV pc, lr
 
 
@@ -318,10 +337,24 @@ UART0_Handler:
     MOVT r2, #0x4000
     LDR r3, [r2, #0x044]
 
+    ORR r3, #0x10
+
+    STR r3, [r2, #0x044]
+
+
+
     ldr r4, ptr_to_flagDirection		;load address to flag
     ldr r5, [r4]				;load content of flag
 
     bl simple_read_character
+
+    ; load pause flag
+    ldr r7, ptr_to_flagPause
+    ldr r7, [r7]
+
+    ;check if equal to one, if equal don't do anything
+    CMP r7, #1
+    BEQ invalidchar
 
     CMP r0, #'w'
     BEQ setw
@@ -401,6 +434,7 @@ Timer_Handler:
 	; them to & from the stack at the beginning & end of the handler.
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
+	;Clear interrupt
 	MOV r0, #0x0000
 	MOVT r0, #0x4003
 
@@ -409,6 +443,20 @@ Timer_Handler:
 	ORR r1, r1, #0x1
 
 	STRB r1, [r0, #0x24]
+
+	;load pause flag
+	ldr r4, ptr_to_flagPause
+    ldr r4, [r4]
+
+    ;check if equal to one, if equal don't do anything
+    CMP r4, #1
+    BEQ EndTimeHandler
+
+	;check for game loss (if loss then do nothing)
+	ldr r4, ptr_to_flagLoss
+	ldr r4, [r4] ;loss flag in r4
+	CMP r4, #1
+	BEQ EndTimeHandler
 
 	;get Board
 	ldr r4, ptr_to_board
@@ -424,8 +472,8 @@ Timer_Handler:
 	;increment board address to current char
 	ADD r4, r4, r5 ;add x
 	MOV r7, #24 ;move 24 into r7
-	MUL r6,r6,r7  ;multiply y coordinate by 24 (24 chars per line)
-	ADD r4, r4, r6 ;add y
+	MUL r7,r6,r7  ;multiply y coordinate by 24 (24 chars per line)
+	ADD r4, r4, r7 ;add y
 
 	;Get the direction
 	ldr r8, ptr_to_flagDirection
@@ -511,8 +559,27 @@ EndTimeHandler:
 	MOV r0, #0xC			;clear the screen
 	bl output_character
 
-	ldr r0, ptr_to_board
+	ldr r0, ptr_to_board		;print the board
 	bl output_string
+
+	ldr r0, ptr_to_stringScore		;load address of where we will store the score string
+
+	ldr r1, ptr_to_flagScore		;load the contents of the score flag
+	ldr r1, [r1]
+
+	bl int2string					; convert to string and store in stringScore
+
+	ldr r0, ptr_to_stringScore
+	bl output_string
+
+	;newline for readability
+	MOV r0, #0xA
+	bl output_character
+
+	MOV r0, #0xD
+	bl output_character
+
+
 
 
 	POP {r4-r12,lr}   ; Restore registers from stack
