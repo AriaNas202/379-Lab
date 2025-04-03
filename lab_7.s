@@ -21,17 +21,20 @@ test:
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/", 0x0
+		.string "/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/", 0xA, 0xD, 0x0
 
 
 
 ball:	.string 27, "[41m ", 0x0
-
 blue:	.string 27, "[44m ", 0x0
 cyan: .string 27, "[46m ", 0x0
 white: .string 27, "[47m ", 0x0
 black: .string 27, "[40m ", 0x0
 yellow: .string 27, "[43m ", 0x0
+ballflagX: .word		0x29
+ballflagY: .word		0x9
+BDFlagX:		.word 0x1
+BDFlagY:		.word 0x0
 
 	.text
 
@@ -54,18 +57,35 @@ ptr_to_cyan:			.word cyan
 ptr_to_white:			.word white
 ptr_to_black:			.word black
 ptr_to_yellow:			.word yellow
+ptr_to_ballflagX:		.word ballflagX
+ptr_to_ballflagY:		.word ballflagY
+ptr_to_BDFlagX:			.word BDFlagX
+ptr_to_BDFlagY:			.word BDFlagY
+
 
 lab7:				; This is your main routine which is called from
 				; your C wrapper.
 	PUSH {r4-r12,lr}   	; Preserve registers to adhere to the AAPCS
 
  	bl uart_init
-	;bl uart_interrupt_init
-	;bl gpio_interrupt_init
+	bl uart_interrupt_init
+	bl gpio_interrupt_init
 
 	;ldr r0, ptr_to_test
 	;bl output_string
+	;MOV r0, #'#'
+	;bl readBoard
+	;MOV r0, #0xC
+	;bl output_character
+	;bl print_board
+
+
+Infin:
 	bl print_board
+	MOV r0, #0xC
+	bl output_character
+	B Infin
+
 
 	; This is where you should implement a loop, waiting for the user to
 	; indicate if they want to end the program.
@@ -84,11 +104,173 @@ uart_interrupt_init:
 
 gpio_interrupt_init:
 
-	; Your code to initialize the SW1 interrupt goes here
-	; Don't forget to follow the procedure you followed in Lab #4
-	; to initialize SW1.
+	;Init for Tiva Functions (Port F)
+
+    ;SETUP Enable Clock (Port F, 5th bit)
+    MOV r1, #0xE608
+    MOVT r1, #0x4000      ;put clock register in r1
+    ADD r1, #0xF0000
+    LDR r2, [r1]        ;loads current clock info into r2
+    ORR r2, r2, #0x20       ;Ors the clock value with mask to set 5th bit to 1
+    STR r2, [r1]        ;store new clock with Port F enabled
+
+    ;Port F, Pin 4 (input)
+    ;Port F, Pin 1,2,3
+    ;Enable Direction for Pins (offset 0x400)
+    MOV r1, #0x5000
+    MOVT r1, #0x4002        ;Move base address for Port F in r1
+    LDR r2, [r1, #0x400]    ;load pin direction register into r2
+
+    BIC r2, r2, #0x10             ;sets 5th bit to input (Pin 4)
+    ORR r2,r2, #0xE ;sets 1,2,3 bit to 1 (output)
+    STR r2, [r1, #0x400]    ;stores the masked value back in directional register
+
+     ;Set as Digital
+    LDR r2, [r1, #0x51C]    ;Loads Digital Mode Register into r2
+    ORR r2, r2, #0x10            ;sets 5th Bit with Mask to 1 (Enables Digital Mode)
+    ORR r2,r2, #0xE ;set 1,2,3 bit to 1
+    STR r2, [r1, #0x51C]    ;stores masked register back
+
+    ;Pull up reg
+    LDR r2, [r1, #0x510]
+    ORR r2, r2, #0x10             ;sets 5th bit to 1 (Pin 4)
+    STR r2, [r1, #0x510]
+
+
+
+
+
+
+    ;Init for GPIO Interrupt
+
+    ;Config For Edge Level Sensitivity
+    MOV r0, #0x5000
+    MOVT r0, #0x4002
+    LDR r1, [r0, #0x404]
+
+    BIC r1,r1,#0x10
+
+    STR r1, [r0, #0x404]
+
+
+
+    ;Select Single Edge Trigger
+    MOV r0, #0x5000
+    MOVT r0, #0x4002
+    LDR r1, [r0, #0x408]
+
+    BIC r1,r1,#0x10
+
+    STR r1, [r0, #0x408]
+
+    ;Select Falling  Edge Direction
+    MOV r0, #0x5000
+    MOVT r0, #0x4002
+    LDR r1, [r0, #0x40C]
+
+    BIC r1,r1,#0x10
+
+    STR r1, [r0, #0x40C]
+
+    ;Config GPIO To allow Interrupts
+    MOV r0, #0x5000
+    MOVT r0, #0x4002
+    LDR r1, [r0, #0x410]
+
+    ORR r1,r1,#0x10
+
+    STR r1, [r0, #0x410]
+
+    ;Config Processor to Allow Interrupts from GPIO
+    MOV r0, #0xE000
+    MOVT r0, #0xE000
+    LDR r1, [r0,#0x100]
+
+    ORR r1,r1,#0x40000000
+
+    STR r1, [r0,#0x100]
+
+    ;Connect Clock to timer
+    MOV r0, #0xE000
+    MOVT r0, #0x400F
+    LDR r1, [r0, #0x604]
+
+    ORR r1, r1, #0x1
+
+    STR r1, [r0, #0x604]
+
+    ;Disable timer
+    MOV r0, #0x0000
+    MOVT r0, #0x4003
+
+    LDR r1, [r0, #0xC]
+    BIC r1, r1, #0x1
+
+    STR r1, [r0, #0xC]
+
+    ;Put timer in 32 bit mode
+    MOV r0, #0x0000
+    MOVT r0, #0x4003
+
+    LDR r1, [r0]
+
+    BIC r1, r1, #0x7
+
+    STR r1, [r0]
+
+    ;Put timer in periodic mode
+    MOV r0, #0x0000
+    MOVT r0, #0x4003
+
+    LDR r1, [r0, #0x4]
+    BIC r1, r1, #0x1
+    ORR r1, r1, #0x2
+
+    STR r1, [r0, #0x4]
+
+    ;Set up interval period
+    MOV r0, #0x0000
+    MOVT r0, #0x4003
+
+    LDR r1, [r0, #0x028]
+
+    MOV r1, #0x2400
+    MOVT r1, #0x00F4
+
+	STR r1, [r0, #0x028]
+
+    ;Enable timer to interrupt processor
+	MOV r0, #0x0000
+    MOVT r0, #0x4003
+
+    LDR r1, [r0, #0x018]
+
+    ORR r1, r1, #0x01
+
+    STR r1, [r0, #0x018]
+
+    ;Configure processer to allow interrupts
+    MOV r0, #0xE000
+    MOVT r0, #0xE000
+
+    LDR r1, [r0, #0x100]
+
+    ORR r1, r1, #0x80000
+
+    STR r1, [r0, #0x100]
+
+	;Enable timer
+	MOV r0, #0x0000
+    MOVT r0, #0x4003
+
+    LDR r1, [r0, #0xC]
+
+    ORR r1, r1, #0x1
+
+    STR r1, [r0, #0xC]
 
 	MOV pc, lr
+
 
 
 UART0_Handler:
@@ -118,7 +300,27 @@ Timer_Handler:
 	; Lab #6.  Instead, you can use the same startup code as for Lab #5.
 	; Remember to preserver registers r4-r12 by pushing then popping
 	; them to & from the stack at the beginning & end of the handler.
+	PUSH {r4-r12,lr} ; Spill registers to stack
 
+	;Clear interrupt
+	MOV r0, #0x0000
+	MOVT r0, #0x4003
+
+	LDRB r1, [r0, #0x24]
+
+	ORR r1, r1, #0x1
+
+	STRB r1, [r0, #0x24]
+
+
+	;This is a test
+	bl moveBall
+
+
+
+
+
+	POP {r4-r12,lr}
 	BX lr       	; Return
 
 
@@ -199,6 +401,101 @@ EndPrintBoard:
 	POP {r4-r12,lr}		; Restore registers to adhere to the AAPCS
 	MOV pc, lr
 
+
+
+addBoard:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+	;argument r0- char to write
+
+
+	;get Board
+	ldr r4, ptr_to_test
+
+	;get x
+	ldr r5, ptr_to_ballflagX
+	LDR r5, [r5]
+
+	;get y
+	ldr r6, ptr_to_ballflagY
+	LDR r6, [r6]
+
+	;increment board address to current char
+	ADD r4, r4, r5 ;add x
+	MOV r7, #84 ;move 84 into r7
+	MUL r6,r6,r7  ;multiply y coordinate by 84 (84 chars per line)
+	ADD r4, r4, r6 ;add y
+
+	;r4 at base address of current char
+	STRB r0, [r4] ; store single byte of r0,
+
+
+
+
+
+
+	POP {r4-r12,lr}   ; Restore registers from stack
+
+	MOV pc, lr	; Return
+
+readBoard:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+	;argument r0- char to write
+
+
+	;get Board
+	ldr r4, ptr_to_test
+
+	;get x
+	ldr r5, ptr_to_ballflagX
+	LDR r5, [r5]
+
+	;get y
+	ldr r6, ptr_to_ballflagY
+	LDR r6, [r6]
+
+	;increment board address to current char
+	ADD r4, r4, r5 ;add x
+	MOV r7, #84 ;move 84 into r7
+	MUL r6,r6,r7  ;multiply y coordinate by 84 (84 chars per line)
+	ADD r4, r4, r6 ;add y
+
+	;r4 at base address of current char
+	LDRB r0, [r4] ; store single byte of r0,
+
+	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
+
+
+moveBall:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+	;Put the color black where the ball was
+	MOV r0, #'?'
+	bl addBoard
+
+	;load the x coordinate
+	ldr r4, ptr_to_ballflagX
+	ldr r5, [r4]
+
+	;load the x direction
+	ldr r6, ptr_to_BDFlagX
+	ldr r7, [r6]
+
+	ADD r8, r5, r7		; Move the ball to the right
+
+	STR r8, [r4]
+
+
+	;write '*' to board
+	MOV r0, #'*'
+	bl addBoard
+
+
+
+	POP {r4-r12,lr}
+	MOV pc, lr
 
 
 	.end
