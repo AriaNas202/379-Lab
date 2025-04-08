@@ -1,110 +1,207 @@
-	.data
-	.global test
-
-
-test:
-		.string "/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/$??????????????????????????????????????????????????????????????????????????????#/", 0xA, 0xD
-		.string "/$???????????????????????????????????????*??????????????????????????????????????#/", 0xA, 0xD
-		.string "/$??????????????????????????????????????????????????????????????????????????????#/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/", 0xA, 0xD, 0x0
+ .text
+	.global uart_init
+	.global gpio_btn_and_LED_init
+	.global output_character
+	.global read_character
+	.global read_string
+	.global output_string
+	.global read_from_push_btns
+	.global illuminate_LEDs
+	.global illuminate_RGB_LED
+	.global read_tiva_push_button
+	.global division
+	.global multiplication
+	.global int2string
 
 
 
-ball:	.string 27, "[41m ", 0x0
-blue:	.string 27, "[44m ", 0x0
-cyan: .string 27, "[46m ", 0x0
-white: .string 27, "[47m ", 0x0
-black: .string 27, "[40m ", 0x0
-yellow: .string 27, "[43m ", 0x0
-ballflagX: .word		0x29
-ballflagY: .word		0x9
-BDFlagX:		.word 0x1
-BDFlagY:		.word 0x0
 
-	.text
-
-	.global uart_interrupt_init
-	.global gpio_interrupt_init
-	.global UART0_Handler
-	.global Switch_Handler
-	.global Timer_Handler		; This is needed for Lab #6
-	.global simple_read_character	; read_character modified for interrupts
-	.global output_character	; This is from your Lab #4 Library
-	.global read_string		; This is from your Lab #4 Library
-	.global output_string		; This is from your Lab #4 Library
-	.global uart_init		; This is from your Lab #4 Library
-	.global lab7
-
-ptr_to_ball:			.word ball
-ptr_to_test:			.word test
-ptr_to_blue:			.word blue
-ptr_to_cyan:			.word cyan
-ptr_to_white:			.word white
-ptr_to_black:			.word black
-ptr_to_yellow:			.word yellow
-ptr_to_ballflagX:		.word ballflagX
-ptr_to_ballflagY:		.word ballflagY
-ptr_to_BDFlagX:			.word BDFlagX
-ptr_to_BDFlagY:			.word BDFlagY
+uart_init:
+	PUSH {r4-r12,lr} ; Spill registers to stack
 
 
-lab7:				; This is your main routine which is called from
-				; your C wrapper.
-	PUSH {r4-r12,lr}   	; Preserve registers to adhere to the AAPCS
+          ; Provide clock to UART0
 
- 	bl uart_init
-	bl uart_interrupt_init
-	bl gpio_interrupt_init
+    MOV r4, #0xE618
+    MOVT r4, #0x400F
+    ;LDR r0, [r4]
 
-	;ldr r0, ptr_to_test
-	;bl output_string
-	;MOV r0, #'#'
-	;bl readBoard
-	;MOV r0, #0xC
-	;bl output_character
-	;bl print_board
+    MOV r1, #1
+
+    STR r1, [r4]
 
 
-Infin:
-	bl print_board
-	MOV r0, #0xC
-	bl output_character
-	B Infin
+
+    ; Enable clock to PortA
+    MOV r4, #0xE608
+    MOVT r4, #0x400F
+    ;LDR r0, [r4]
+
+    MOV r1, #1
+
+    STR r1, [r4]
 
 
-	; This is where you should implement a loop, waiting for the user to
-	; indicate if they want to end the program.
 
-	POP {r4-r12,lr}		; Restore registers to adhere to the AAPCS
+    ; Disable UART0 Control
+    MOV r4, #0xC030
+    MOVT r4, #0x4000
+    ;LDR r0, [r4]
+
+    MOV r1, #0
+
+    STR r1, [r4]
+
+
+
+    ; Set UART0_IBRD_R for 115,200 baud
+    MOV r4, #0xC024
+    MOVT r4, #0x4000
+    ;LDR r0, [r4]
+    MOV r1, #8
+    STR r1, [r4]
+
+
+
+    ; Set UART0_FBRD_R for 115,200 baud
+    MOV r4, #0xC028
+    MOVT r4, #0x4000
+   ; LDR r0, [r4]
+
+    MOV r1, #44
+
+    STR r1, [r4]
+
+
+
+    ; Use System Clock
+    MOV r4, #0xCFC8
+    MOVT r4, #0x4000
+    ;LDR r0, [r4]
+
+    MOV r1, #0
+
+    STR r1, [r4]
+
+
+
+    ; Use 8-bit word length, 1 stop bit, no parity
+    MOV r4, #0xC02C
+    MOVT r4, #0x4000
+    ;LDR r0, [r4]
+
+    MOV r1, #0x60
+
+    STR r1, [r4]
+
+
+
+    ; Enable UART0 Control
+    MOV r4, #0xC030
+    MOVT r4, #0x4000
+    ;LDR r0, [r4]
+
+    MOV r1, #0x301
+
+    STR r1, [r4]
+
+
+
+    ; Make PA0 and PA1 as Digital Ports
+    MOV r4, #0x451C
+    MOVT r4, #0x4000  ;r4 - address
+    LDR r0, [r4] ;r0- address value
+
+    ;LDR r1, [r0]
+
+    ORR r1, r0, #0x03 ;masked value
+
+    STR r1, [r4]
+
+
+
+    ; Change PA0,PA1 to Use an Alternate Function
+    MOV r4, #0x4420
+    MOVT r4, #0x4000
+    LDR r0, [r4] ;r0- address value
+
+    ;LDR r1, [r0]
+
+    ORR r1, r0, #0x03 ;masked value
+
+    STR r1, [r4]
+
+
+
+    ; Configure PA0 and PA1 for UART
+    MOV r4, #0x452C
+    MOVT r4, #0x4000
+    LDR r0, [r4] ;r0- address value
+
+    ;LDR r1, [r0]
+
+    ORR r1, r0, #0x11 ;masked value
+
+    STR r1, [r4]
+
+	POP {r4-r12,lr}   ; Restore registers from stack
 	MOV pc, lr
 
+gpio_btn_and_LED_init:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+;INIT FOR BUTTONS ALICE BOARD (Port D)
+
+    ;SETUP Enable Clock (Port D, Pins 3-0) (Pin0==Switch5. Pin3==Switch2)
+    MOV r1, #0xE608
+    MOVT r1, #0x4000      ;put clock register in r1
+    ADD r1, #0xF0000
+    LDR r2, [r1]        ;loads current clock info into r2
+    ORR r2, r2, #0x8       ;Ors the clock value with mask to set 3ed bit to 1
+    STR r2, [r1]        ;store new clock with Port F enabled
 
 
-uart_interrupt_init:
+    ;Port D, Pin 0,1,2,3
+    ;Enable Direction for Pins (offset 0x400)
+    MOV r1, #0x7000
+    MOVT r1, #0x4000        ;Move base address for Port D in r1
+    LDR r2, [r1, #0x400]    ;load pin direction register into r2
 
-	; Your code to initialize the UART0 interrupt goes here
+    BIC r2, r2, #0xF             ;sets Pin 0,1,2,3 bit to input
+    STR r2, [r1, #0x400]    ;stores the masked value back in directional register
 
-	MOV pc, lr
+
+    ;Set as Digital
+    LDR r2, [r1, #0x51C]    ;Loads Digital Mode Register into r2
+    ORR r2, r2, #0xF            ;sets Pin 0,1,2,3 Bit with Mask to 1 (Enables Digital Mode)
+    STR r2, [r1, #0x51C]    ;stores masked register back
 
 
-gpio_interrupt_init:
+    ;INIT for LEDs ALICE (Port B)
 
-	;Init for Tiva Functions (Port F)
+    ;SETUP Enable Clock (Port B, 1st bit)
+    MOV r1, #0xE608
+    MOVT r1, #0x4000      ;put clock register in r1
+    ADD r1, #0xF0000
+    LDR r2, [r1]        ;loads current clock info into r2
+    ORR r2, r2, #0x02       ;!!!!!!Ors the clock value with mask to set 1st bit to 1
+    STR r2, [r1]        ;store new clock with Port B enabled
+
+    ;Port B, Pins 0,1,2,3 ;!!!!!!
+    ;Enable Direction for Pins (offset 0x400)
+    MOV r1, #0x5000
+    MOVT r1, #0x4000    ;Move base address for Port B in r1
+    LDR r2, [r1, #0x400]    ;load pin direction register into r2
+    ORR r2,r2, #0xF         ;sets 0,1,2,3 to 1 (output)
+    STR r2, [r1, #0x400]    ;stores the masked value back in directional register
+
+    ;Set as Digital
+    LDR r2, [r1, #0x51C]    ;Loads Digital Mode Register into r2
+    ORR r2, r2, #0x0F            ;sets 1st  Bit with Mask to 1 (Enables Digital Mode)
+    STR r2, [r1, #0x51C]    ;stores masked register back
+
+
+;Init for Tiva Functions (Port F)
 
     ;SETUP Enable Clock (Port F, 5th bit)
     MOV r1, #0xE608
@@ -136,366 +233,521 @@ gpio_interrupt_init:
     ORR r2, r2, #0x10             ;sets 5th bit to 1 (Pin 4)
     STR r2, [r1, #0x510]
 
-
-
-
-
-
-    ;Init for GPIO Interrupt
-
-    ;Config For Edge Level Sensitivity
-    MOV r0, #0x5000
-    MOVT r0, #0x4002
-    LDR r1, [r0, #0x404]
-
-    BIC r1,r1,#0x10
-
-    STR r1, [r0, #0x404]
-
-
-
-    ;Select Single Edge Trigger
-    MOV r0, #0x5000
-    MOVT r0, #0x4002
-    LDR r1, [r0, #0x408]
-
-    BIC r1,r1,#0x10
-
-    STR r1, [r0, #0x408]
-
-    ;Select Falling  Edge Direction
-    MOV r0, #0x5000
-    MOVT r0, #0x4002
-    LDR r1, [r0, #0x40C]
-
-    BIC r1,r1,#0x10
-
-    STR r1, [r0, #0x40C]
-
-    ;Config GPIO To allow Interrupts
-    MOV r0, #0x5000
-    MOVT r0, #0x4002
-    LDR r1, [r0, #0x410]
-
-    ORR r1,r1,#0x10
-
-    STR r1, [r0, #0x410]
-
-    ;Config Processor to Allow Interrupts from GPIO
-    MOV r0, #0xE000
-    MOVT r0, #0xE000
-    LDR r1, [r0,#0x100]
-
-    ORR r1,r1,#0x40000000
-
-    STR r1, [r0,#0x100]
-
-    ;Connect Clock to timer
-    MOV r0, #0xE000
-    MOVT r0, #0x400F
-    LDR r1, [r0, #0x604]
-
-    ORR r1, r1, #0x1
-
-    STR r1, [r0, #0x604]
-
-    ;Disable timer
-    MOV r0, #0x0000
-    MOVT r0, #0x4003
-
-    LDR r1, [r0, #0xC]
-    BIC r1, r1, #0x1
-
-    STR r1, [r0, #0xC]
-
-    ;Put timer in 32 bit mode
-    MOV r0, #0x0000
-    MOVT r0, #0x4003
-
-    LDR r1, [r0]
-
-    BIC r1, r1, #0x7
-
-    STR r1, [r0]
-
-    ;Put timer in periodic mode
-    MOV r0, #0x0000
-    MOVT r0, #0x4003
-
-    LDR r1, [r0, #0x4]
-    BIC r1, r1, #0x1
-    ORR r1, r1, #0x2
-
-    STR r1, [r0, #0x4]
-
-    ;Set up interval period
-    MOV r0, #0x0000
-    MOVT r0, #0x4003
-
-    LDR r1, [r0, #0x028]
-
-    MOV r1, #0x2400
-    MOVT r1, #0x00F4
-
-	STR r1, [r0, #0x028]
-
-    ;Enable timer to interrupt processor
-	MOV r0, #0x0000
-    MOVT r0, #0x4003
-
-    LDR r1, [r0, #0x018]
-
-    ORR r1, r1, #0x01
-
-    STR r1, [r0, #0x018]
-
-    ;Configure processer to allow interrupts
-    MOV r0, #0xE000
-    MOVT r0, #0xE000
-
-    LDR r1, [r0, #0x100]
-
-    ORR r1, r1, #0x80000
-
-    STR r1, [r0, #0x100]
-
-	;Enable timer
-	MOV r0, #0x0000
-    MOVT r0, #0x4003
-
-    LDR r1, [r0, #0xC]
-
-    ORR r1, r1, #0x1
-
-    STR r1, [r0, #0xC]
-
+	POP {r4-r12,lr}   ; Restore registers from stack
 	MOV pc, lr
 
 
-
-UART0_Handler:
-
-	; Your code for your UART handler goes here.
-	; Remember to preserver registers r4-r12 by pushing then popping
-	; them to & from the stack at the beginning & end of the handler
-
-	BX lr       	; Return
-
-
-Switch_Handler:
-
-	; Your code for your UART handler goes here.
-	; Remember to preserver registers r4-r12 by pushing then popping
-	; them to & from the stack at the beginning & end of the handler
-
-	BX lr       	; Return
-
-
-Timer_Handler:
-
-	; Your code for your Timer handler goes here.  It is not needed for
-	; Lab #5, but will be used in Lab #6.  It is referenced here because
-	; the interrupt enabled startup code has declared Timer_Handler.
-	; This will allow you to not have to redownload startup code for
-	; Lab #6.  Instead, you can use the same startup code as for Lab #5.
-	; Remember to preserver registers r4-r12 by pushing then popping
-	; them to & from the stack at the beginning & end of the handler.
+output_character:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
-	;Clear interrupt
-	MOV r0, #0x0000
-	MOVT r0, #0x4003
 
-	LDRB r1, [r0, #0x24]
+        MOV r1, #0xC018
+        MOVT r1, #0x4000    ;load flag reg address in r1
+        MOV r3, #0x20       ;load mask 5th bit in r3
 
-	ORR r1, r1, #0x1
+Polling:
+        LDRB r2, [r1]       ;load flag into r2
+        AND r2,r2,r3        ;mask r2 to the 5th bit
 
-	STRB r1, [r0, #0x24]
+        CMP r2, #0          ;does the mask flag == 0?
+        BNE Polling         ;If r2!=0 (r2==1) then we keep polling until we get 1
 
+        MOV r1, #0xC000
+        MOVT r1, #0x4000    ;Load data address into r1
 
-	;This is a test
-	bl moveBall
+        STRB r0, [r1]       ;store argument in r0 into data register at r1
 
-
-
-
-
-	POP {r4-r12,lr}
-	BX lr       	; Return
-
-
-simple_read_character:
-
-	MOV pc, lr	; Return
-
-
-
-
-
-print_board:
-	PUSH {r4-r12,lr}   	; Preserve registers to adhere to the AAPCS
-
-	ldr r4, ptr_to_test
-GetBoardChar:
-	LDRB r0, [r4]           ;load current char into r0
-
-	CMP r0, #'*'
-	BEQ PrintRed
-	CMP r0, #'?'
-	BEQ PrintBlack
-	CMP r0, #'$'
-	BEQ PrintWhite
-	CMP r0, #'#'
-	BEQ PrintCyan
-	CMP r0, #'X'
-	BEQ PrintBlue
-	CMP r0, #'/'
-	BEQ PrintYellow
-	CMP r0, #0              ;compare current char to NULL (Is this the End of the String?)
-    BEQ EndPrintBoard
-
-    ;print Char (normal case)
-    BL output_character
-   	ADD r4,r4,#1
-   	B GetBoardChar
-
-PrintRed:
-	ldr r0, ptr_to_ball
-	bl output_string
-	ADD r4,r4,#1
-	B GetBoardChar
-
-PrintBlack:
-	ldr r0, ptr_to_black
-	bl output_string
-	ADD r4,r4,#1
-	B GetBoardChar
-
-PrintWhite:
-	ldr r0, ptr_to_white
-	bl output_string
-	ADD r4,r4,#1
-	B GetBoardChar
-
-PrintCyan:
-	ldr r0, ptr_to_cyan
-	bl output_string
-	ADD r4,r4,#1
-	B GetBoardChar
-
-PrintBlue:
-	ldr r0, ptr_to_blue
-	bl output_string
-	ADD r4,r4,#1
-	B GetBoardChar
-
-PrintYellow:
-	ldr r0, ptr_to_yellow
-	bl output_string
-	ADD r4,r4,#1
-	B GetBoardChar
-
-
-EndPrintBoard:
-
-	POP {r4-r12,lr}		; Restore registers to adhere to the AAPCS
+	POP {r4-r12,lr}   ; Restore registers from stack
 	MOV pc, lr
 
-
-
-addBoard:
+read_character:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
-	;argument r0- char to write
+LOOP:
+    MOV r4, #0xC000     ;UART base address
+    MOVT r4, #0x4000
+    LDRB r5, [r4, #0x18] ;Load from memory
+    AND r5, r5, #0x10   ;Mask
+    CMP r5, #0x10
+    BEQ LOOP            ;If equal keep looping
+    LDRB r0, [r4]       ;Store in r0
+
+	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
+
+read_string:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+;ARGUMENTS
+    ;r0- base address of stirng
+
+    MOV r4,r0           ;move the base address into r4
+
+LOOP1:
+    BL read_character   ;Call read_character (current char in r0)
+    BL output_character ;Call output_character
+
+    CMP r0, #0xD        ;Is r0 = Enter?
+    BEQ DONE            ;If yes, go to DONE
+
+    STRB r0, [r4]       ;If no, store r0 in memory
+    ADD r4, r4, #1      ;Increment r4 to the next memory address
+    B LOOP1             ;Loop and repeat until r0 = Enter
+
+DONE:
+    MOV r0, #0x0         ;store NULL in r0
+    STRB r0, [r4]       ;store NULL in memory
+
+	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
+
+output_string:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+;ARGUMENTS
+    ;r0    - Original Base of string address
+    ;      - Will turn into "current char" argument
+    ;r4    - New base of String Address
+
+    MOV r4, r0              ;copy base address into r4
+
+GetChar:
+    LDRB r0, [r4]           ;load current char into r0
+
+    CMP r0, #0              ;compare current char to NULL (Is this the End of the String?)
+    BEQ EndOutputString     ;If current char is NULL, were done printing the string, branch to end
+
+    BL output_character     ;call function to print char in r0 as argument
+
+    ADD r4,r4,#1            ;incrament base address to the next char
+
+    B GetChar               ;Branch to handle the next char
 
 
-	;get Board
-	ldr r4, ptr_to_test
+EndOutputString:
 
-	;get x
-	ldr r5, ptr_to_ballflagX
-	LDR r5, [r5]
+	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
 
-	;get y
-	ldr r6, ptr_to_ballflagY
-	LDR r6, [r6]
+read_from_push_btns:
+	PUSH {r4-r12,lr} ; Spill registers to stack
 
-	;increment board address to current char
-	ADD r4, r4, r5 ;add x
-	MOV r7, #84 ;move 84 into r7
-	MUL r6,r6,r7  ;multiply y coordinate by 84 (84 chars per line)
-	ADD r4, r4, r6 ;add y
+          ;r0- return value
+          ;r1- base address (port D)
+          ;r2- data register
+          ;r3 - masked data
 
-	;r4 at base address of current char
-	STRB r0, [r4] ; store single byte of r0,
+          MOV r0, #0 ;init return value to 0
+
+          MOV r1, #0x7000
+     MOVT r1, #0x4000        ;Move base address for Port D in r1
+      ;Get Register which reads the buttons
+     LDR r2, [r1, #0x3FC]    ;Puts the data from reg into r2
+
+     ;read button 2 (pin 3, 4th bit) (MSB)
+     AND r3, r2, #0x08 ;mask 4th bit to read button 2
+
+     CMP r3, #0x0 ;compare button push to 0
+     BEQ Button5 ;if button is  0, then its NOT pushed, skip adding 1 (button is not pushed)
+
+     ;store 1 in MSB
+     ADD r0, r0, #0x80000000 ;button 2 is pushed, store MSB
 
 
 
+Button5:
+
+;read button 5 (pin 0, 1st bit) (LSB)
+     AND r3, r2, #0x01 ;mask 1st bit to read button 5
+
+     CMP r3, #0x0 ;compare button push to 0
+     BEQ DoneButtons ;if button is  0, then its NOT pushed, skip adding 1 (button is not pushed)
+
+     ADD r0,r0,#0x1 ;button 5 is pushed, store LSB
+
+DoneButtons:
 
 
 
 	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
 
-	MOV pc, lr	; Return
+illuminate_LEDs:
 
-readBoard:
+
+    PUSH {r4-r12,lr} ; Spill registers to stack
+
+
+    ;r0 bit pattern
+
+    ;r1 - address of port B
+    ;r2- data reg
+
+
+
+    MOV r1, #0x5000
+    MOVT r1, #0x4000    ;Move base address for Port B in r1
+
+    ;Get Register which controls the light
+    LDRb r2, [r1, #0x3FC]    ;Puts the data from reg into r2
+
+
+
+	MOV r7, #0xF
+	BIC r2, r2, r7
+
+    ORR r2,r2,r0    ;store bits into data reg
+
+    ;store the updated data reg BACK
+    STRb r2, [r1, #0x3FC]    ;Puts the data BACK with Appropriate Lights
+
+
+
+    POP {r4-r12,lr}   ; Restore registers from stack
+    MOV pc, lr
+
+
+
+illuminate_RGB_LED:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
-	;argument r0- char to write
+
+    ;ro- Color to be displayed
+
+    ;r1- address bucket
+    ;r2- regsiter data bucket
+    ;r3 - trash
+
+    ;Red    1    (pin 1)
+    ;Blue   2    (pin 2)
+    ;Green  3    (pin 3)
+    ;Purple 4    (pin 1 and 2) (Red and Blue)
+    ;Yellow 5    (Pin 1 and 3) (Green and Red)
+    ;White  6    (All Pins) (Red, Blue, Green)
+    ;OFF 7 (ALL PINS OFF)
 
 
-	;get Board
-	ldr r4, ptr_to_test
 
-	;get x
-	ldr r5, ptr_to_ballflagX
-	LDR r5, [r5]
+    ;Get Register which controls the light
+    MOV r1, #0x5000
+    MOVT r1, #0x4002 ; base address for GPIO Port F
+    LDR r2, [r1, #0x3FC]    ;Puts the data from reg into r2
 
-	;get y
-	ldr r6, ptr_to_ballflagY
-	LDR r6, [r6]
+    ;Figure out what color the light is supposed to be
+    CMP r0, #1
+    BEQ Red     ;If red branch to red
+    CMP r0, #2
+    BEQ Blue    ;If blue branch to blue
+    CMP r0, #3
+    BEQ Green   ;If hreen branch to green
+    CMP r0, #4
+    BEQ Purple  ;If purple branch to purple
+    CMP r0, #5
+    BEQ Yellow  ;If yellow branch to yellow
+    CMP r0, #6
+    BEQ White  ;If white branch to white
 
-	;increment board address to current char
-	ADD r4, r4, r5 ;add x
-	MOV r7, #84 ;move 84 into r7
-	MUL r6,r6,r7  ;multiply y coordinate by 84 (84 chars per line)
-	ADD r4, r4, r6 ;add y
+    B LEDOff     ;None of the other colors were right, so it must be OFF
 
-	;r4 at base address of current char
-	LDRB r0, [r4] ; store single byte of r0,
+
+
+
+    ;Set r2 to appropriate value for color
+Red:
+    ORR r2, r2, #0x2        ;set Pin 1
+    BIC r2, r2, #0xC     ;clears Pin 2 and 3
+    B IllDone
+
+Blue:
+    ORR r2, r2, #0x4        ;set Pin 2
+    BIC r2, r2, #0xA     ;clears Pin 1 and 3
+    B IllDone
+
+Green:
+    ORR r2, r2, #0x8    ;set Pin 3
+    BIC r2, r2, #0x6     ;clears Pin 1 and 2
+    B IllDone
+
+Purple:
+    ORR r2, r2, #0x6       ;set Pin 1 and 2
+    BIC r2, r2, #0x8     ;clears Pin 3
+    B IllDone
+
+Yellow:
+    ORR r2, r2, #0xA       ;set Pin 1 and 3
+    BIC r2, r2, #0x4     ;clears Pin 2
+    B IllDone
+
+White:
+    ORR r2, r2, #0xE        ;set Pin 1 and 2 and 3
+    B IllDone
+
+LEDOff:
+    BIC r2, r2, #0xE        ;set Pin 1 and 2 and 3
+    B IllDone
+
+
+
+IllDone:
+
+    STR r2, [r1, #0x3FC]    ;Puts the data BACK with Appropriate color
+
+
+	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
+
+read_tiva_push_button:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+
+
+	MOV r2, #0x5000
+    MOVT r2, #0x4002 ; base address for GPIO Port F
+    LDRB r3, [r2, #0x3FC] ; load byte into r3 with offset
+
+    AND r3, r3, #0x10 ; check if the bit is 1
+    CMP r3, #0x10 ; is button pressed ?
+    BEQ NOTPRESSED          ; No
+    MOV r0, #1 ; Yes
+    B DONEEE
+
+NOTPRESSED:
+	MOV r0, #0
+
+DONEEE:
 
 	POP {r4-r12,lr}   ; Restore registers from stack
 	MOV pc, lr
 
 
-moveBall:
-	PUSH {r4-r12,lr} ; Spill registers to stack
+division:
+	PUSH {r4-r12,lr}	; Store registers r4 through r12 and lr on the
+				; stack. Do NOT modify this line of code.  It
+    			      	; ensures that the return address is preserved
+ 		            	; so that a proper return to the C wrapped can be
+			      	; executed.
 
-	;Put the color black where the ball was
-	MOV r0, #'?'
-	bl addBoard
-
-	;load the x coordinate
-	ldr r4, ptr_to_ballflagX
-	ldr r5, [r4]
-
-	;load the x direction
-	ldr r6, ptr_to_BDFlagX
-	ldr r7, [r6]
-
-	ADD r8, r5, r7		; Move the ball to the right
-
-	STR r8, [r4]
+	; Your code for the division routine goes here.
 
 
-	;write '*' to board
-	MOV r0, #'*'
-	bl addBoard
+	;Initialization
+
+				;Dividend r0
+				;Divisor r1
+	MOV r2, #15	;Counter r2 (init 15)
+	MOV r3,#0	;Quotient r3 (init 0)
+	MOV r4, #0	;Trash r4 (init 0)
+	MOV r5, r0	;Remainder r5 (init r0, dividend)
+	MOV r6, #0 ;Our "0" register, something to compare 0 to
+
+	;SETUP (before loops)
+	LSL r1, r1, #15 ; logical left shift divisor 15 places
 
 
 
-	POP {r4-r12,lr}
+
+	;Break 1 -> Major Outer Loop Start
+Break1:	SUB r5, r5, r1 ; remainder = remainder - divisor
+
+		CMP r5, r6 ; compare remainder to 0
+		BLT Break2 ; Branch to B2 if r5(remainder)<0
+
+		;No Branch to B2
+
+		LSL r3,r3,#1 ;logical left shift quotient
+		ORR r3,r3,#0x01 ;set quotient LSB to 1
+
+	;Break 3 -> Going Back to Main Path after Fixing Remainder<0
+Break3:
+		LSR r1,r1,#1 ; logical right shift divisor (MSB=0)
+
+		CMP r2,r6 ; compare counter to 0
+		BGT Break4 ; branch to B4 if counter>0
+
+		;NO BRANCH (which means we end here)
+		;Break5
+		B Break5
+
+		;Break2 -> Remainder is less than 0, fix and then Branch to B3 on Main Path
+Break2:
+		ADD r5,r5,r1 ; remainder=remainder+divisor
+		LSL r3,r3,#1 ; logical left shift quotient
+		B Break3 ;After we dealt with remainder, we go back to shifting the divisor
+
+		;Break4 -> Counter is more than 0, decrement counter and go back to start of Main Loop
+Break4:
+		SUB r2, r2, #1 ; decrament counter
+		B Break1 ; branch to beginning of major loop
+
+
+		;Break5 -> We've got the solution, save it in r0 and END
+Break5:
+		ADD r0,r3,#0 ; put the quotient into r0 to end
+
+
+	POP {r4-r12,lr}		; Restore registers r4 through r12 and lr from
+    				; the stack. Do NOT modify this line of code.
+    			      	; It ensures that the return address is preserved
+ 		            	; so that a proper return to the C wrapped can be
+			      	; executed.
+
+	; The following line is used to return from the subroutine
+	; and should be the last line in your subroutine.
+
 	MOV pc, lr
 
+multiplication:
+	PUSH {r4-r12,lr}	; Store registers r4 through r12 and lr on the
+				; stack. Do NOT modify this line of code.  It
+    			     	; ensures that the return address is preserved
+ 		            	; so that a proper return to the C wrapped can be
+			      	; executed.
 
-	.end
+	; Your code for the multiplication routine goes here.
+
+	;Initialization!!!!!
+	;r0 - factor (dont init)
+	;r1 - factor (dont init)
+	;r2 - counter (init 0)
+	;r3 - product (init 0)
+	;r4 - used as a temp trash register (init 0)
+
+	MOV r2, #0 ;counter
+	MOV r3, #0 ;product
+	MOV r4, #0 ;trash
+
+	;START WORKING!!!! MULTIPLICATION!!!!!!!
+
+	;it doesnt work when r0 is 0 because we add r1 to product before checking add by 0, so adding another check up here
+MulCheck:	CMP r2, r0 ;check to see r0==r2 (which is 0 rn)
+			BEQ MulEnd ;if r0 and counter (0) are equal then it means we branch to the end (mult by 0)
+
+MyLoop:	ADD r4, r3, r1 ; Add factor r1 to the final product, stored in trash reg
+		ADD r3, r4, #0 ;Stores the new added product in product register r3
+
+		ADD r2, r2, #1 ; increment the counter by 1
+
+		B MulCheck ;Unconditional branch to the checker
+
+MulEnd:	ADD r0, r3, #0 ;store product r3 in r0
+
+	POP {r4-r12,lr}		; Restore registers r4 through r12 and lr from
+    				; the stack. Do NOT modify this line of code.
+    			      	; It ensures that the return address is preserved
+ 		            	; so that a proper return to the C wrapped can be
+			      	; executed.
+	; The following line is used to return from the subroutine
+	; and should be the last line in your subroutine
+	MOV pc, lr
+
+int2string:
+    PUSH {r4-r12,lr}        ; Store any registers in the range of r4 through r12
+                            ; that are used in your routine. Include lr if this
+                            ; routine calls another routine.
+
+
+
+    ;Arguments
+    ;r0- base address to store string
+    ;r1- int to convert
+    ;r2- will become current digit argument
+    ;r3- comma counter (init to 0)
+    ;r4- comma address (has comma hex value stored in it)
+    ;r5- has 10 stored for mod operations
+    ;r6- trash
+    ;;;;;;;Converts all Digits (as ints) in stack to a string
+    MOV r3, #0       ;init comma counter to 0
+    MOV r4, #','     ;init comma register to ','
+    MOV r5, #10  ;stores 10
+
+
+
+
+
+    ;;;;;;;;Push a terminator so stack knows when to stop
+    MOV r2, #0xFF   ;using 0xFF as stack terminator
+    PUSH {r2}       ;push terminator to stack
+
+
+
+    ;;;;;;;;Handle Base Case 0 (if number were converting is 0 originally)
+    CMP r1, #0              ;Is originally in == 0?
+    BNE ConvertToDigits     ;If out int isnt originally 0 we need to convert it to digits, so branch
+
+    MOV r2, r1              ;Moves r1 (0 int) into r2 so CovertToString works
+    PUSH {r2}               ;Pushes r2 (0 int) to stack
+    B ConvertToString       ;Branches to covert 0 into a string
+
+
+
+    ;;;;;;;;Converts all digits to stack until r1 (original int) is 0
+ConvertToDigits:
+
+    ;Check if r1 is 0 yet
+    CMP r1, #0              ;Is r1 0 yet?
+    BEQ ConvertToString     ;If r1 is 0 then its time to convert into a string
+
+    ;Modulo by 10 (To get rightmost digit)
+    UDIV r2,r1, r5          ;r2=r1/10
+    MUL r2, r2, r5         ; r2=r2*10
+    SUB r2, r1, r2          ; r2=r1-r2 (this should store rightmost digit in r2)
+
+    CMP r3, #3 ;compare comma counter to 3
+    BNE NoComma1            ;compare comma counter to 3
+    MOV r6, r2              ;if comma counter isnt 3, we can skip adding a comma
+    MOV r2, r4              ;temporarily store digit in r2 into r6
+    PUSH {r2}               ;store ',' in r2
+    MOV r2, r6              ;restore digit in r2
+
+
+NoComma1:
+    PUSH {r2}               ;push current digit (as an int) to stack
+    ADD r3,r3,#1 ;increment comma counter
+    UDIV r1, r1, r5        ;move the whole int right by 1 digit (ex. 123 -> 12)
+    B ConvertToDigits       ;branch back to loop to continure to convert r1 until its 0
+
+
+
+
+;;;;;
+ConvertToString:
+
+    POP {r2}                ;get digit to convert into string
+
+
+    CMP r2, #0xFF           ;Did we reach the stack terminator yet?
+    BEQ EndInt2Str          ;If weve hit the stack terminator, were at the EndInt2Str
+
+    CMP r2, r4
+    BNE NoComma2
+
+    STRB r4, [r0]            ;add a comma (which is in r4) at memory address in r0
+
+
+    ADD r0, r0, #1           ;increment address for next char
+    POP {r2}
+
+
+NoComma2:
+    ADD r2,r2,#0x30         ;Turn r2 int into ascii
+    STRB r2, [r0]           ;Stores current char (r2) into r0 address
+    ADD r0,r0,#1            ;Increment address for next char
+    ADD r3, r3, #1          ;Increment comma counter by 1
+    B ConvertToString
+
+
+    ;;;;;;;
+EndInt2Str:
+
+    MOV r2,#0               ;Stores null terminator in r2
+    STRB r2, [r0]           ;Stores null terminator in memory
+
+
+
+    POP {r4-r12,lr}         ; Restore registers all registers preserved in the
+                            ; PUSH at the top of this routine from the stack.
+    mov pc, lr
+
+
+
+.end
