@@ -42,6 +42,10 @@ board:
 
 
 ball:	.string 27, "[41m ", 0x0
+paddleLeft:	.string 27, "[41m ", 0x0
+paddleRight:	.string 27, "[41m ", 0x0
+
+
 blue:	.string 27, "[44m ", 0x0
 cyan: .string 27, "[46m ", 0x0
 white: .string 27, "[47m ", 0x0
@@ -77,7 +81,8 @@ ptr_to_yellow:			.word yellow
 ptr_to_ballflagX:		.word ballflagX
 ptr_to_ballflagY:		.word ballflagY
 ptr_to_BDFlagX:			.word BDFlagX
-ptr_to_BDFlagY:			.word BDFlagY
+ptr_to_paddleLeft:			.word paddleLeft
+ptr_to_paddleRight:			.word paddleRight
 
 
 lab7:				; This is your main routine which is called from
