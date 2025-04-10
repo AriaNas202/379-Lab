@@ -43,8 +43,8 @@ board:
 
 
 ball:	.string 27, "[41m ", 0x0
-paddleLeft:	.string 27, "[41m ", 0x0
-paddleRight:	.string 27, "[41m ", 0x0
+paddleLeft:	.string 27, "[47m ", 0x0
+paddleRight:	.string 27, "[46m ", 0x0
 
 
 blue:	.string 27, "[44m ", 0x0
@@ -61,6 +61,10 @@ ballflagX: .word	0x2A
 ballflagY: .word	0xC
 BDFlagX:		.word 0x1
 BDFlagY:		.word 0x0
+PaddlePosL:	.word 0xC
+PaddlePosR:	.word 0xC
+PDFlagL:		.word 0xFFFFFFFF
+PDFlagR:	.word 0x1
 
 	.text
 
@@ -90,6 +94,10 @@ ptr_to_BDFlagX:			.word BDFlagX
 ptr_to_paddleLeft:		.word paddleLeft
 ptr_to_paddleRight:		.word paddleRight
 ptr_to_trash:			.word trash
+ptr_to_PaddlePosL:		.word PaddlePosL
+ptr_to_PaddlePosR:		.word PaddlePosR
+ptr_to_PDFlagL:			.word PDFlagL
+ptr_to_PDFlagR:			.word PDFlagR
 
 
 lab7:				; This is your main routine which is called from
@@ -104,20 +112,26 @@ lab7:				; This is your main routine which is called from
 	bl print_board
 
 
+	;MOV r0, #1
+	;MOV r1, #1
+	;bl moveCursor
+	;ldr r0, ptr_to_cyan
+	;bl output_string
 
-	bl moveCursor
+
 
 Infin:
-	bl moveCursor
+	bl movePaddle
+	;bl moveCursor
 
-	ldr r0, ptr_to_black
-	bl output_string
+	;ldr r0, ptr_to_black
+	;bl output_string
 
-	bl moveBall
-	bl moveCursor
+	;bl moveBall
+	;bl moveCursor
 
-	ldr r0, ptr_to_ball
-	bl output_string
+	;ldr r0, ptr_to_ball
+	;bl output_string
 	B Infin
 
 
@@ -465,16 +479,18 @@ moveBall:
 	ldr r7, [r6]
 
 	CMP r5, #80
-	BEQ changeXdirection
+	BEQ changeXtoLeft
 
+  	CMP r5, #3
+	BEQ changeXtoRight
 
 	ADD r8, r5, r7		; Move the ball to the right
 
 	STR r8, [r4]
 
-	b end
+	b endMoveBall
 
-changeXdirection:
+changeXtoLeft:
 
 	MOV r7, #-1
 	ADD r8, r5, r7		; Move the ball to the left
@@ -482,52 +498,111 @@ changeXdirection:
 	STR r8, [r4]
 	STR r7, [r6]
 
-end:
+  b endMoveBall
+
+changeXtoRight:
+
+  MOV r7, #1
+  ADD r8, r5, r7
+
+  STR r8, [r4]
+  STR r7, [r6]
+
+  b endMoveBall
+
+endMoveBall:
+
+	POP {r4-r12,lr}
+	MOV pc, lr
+
+
+moveCursor:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+	;FOR NOW
+	;r0-> x (column) (r4)
+	;r1 -> y (row)  (r5)
+	MOV r4, r0
+	MOV r5, r1
+
+
+	;print ESC
+	MOV r0, #0x1B
+	bl output_character
+
+	;print [
+	MOV r0, #0x5B
+	bl output_character
+
+
+	;print y (in r5)
+	ldr r0, ptr_to_trash
+	MOV r1, r5
+
+	bl int2string
+
+	ldr r0, ptr_to_trash
+	bl output_string
+
+	;print ;
+	MOV r0, #0x3B
+	bl output_character
+
+	;print x (in r4)
+	ldr r0, ptr_to_trash
+	MOV r1, r4
+
+	bl int2string
+
+	ldr r0, ptr_to_trash
+	bl output_string
+
+	;print H
+	MOV r0, #0x48
+	bl output_character
 
 
 	POP {r4-r12,lr}
 	MOV pc, lr
 
-moveCursor:
+movePaddle:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
-	MOV r0, #0x1B
-	bl output_character
+	ldr r4, ptr_to_PaddlePosL		;Load left paddle's position (r5)
+	ldr r5, [r4]
 
-	MOV r0, #0x5B
-	bl output_character
+	ldr r6, ptr_to_PDFlagL			;Load direction for left paddle (r7)
+	ldr r7, [r6]
+
+	CMP r7, #-1						; check if ball is going up
+	BEQ paddleUp
 
 
-	ldr r0, ptr_to_ballflagY
-	ldr r1, [r0]
+;MOVE UP LEFT
+paddleUp:
+	CMP r5, #5						; Check if paddle is at the top
+	BEQ endmovePaddle
 
+	;ptr_to_paddleLeft
+	MOV r0, #2			;x coordinate static
+	ADD r8, r5, #1		;increment 1 down for black (empty space)
+	MOV r1, r8			;y coordinate dynamic
+	bl moveCursor
 
-	;bl output_character
-
-	ldr r0, ptr_to_trash
-
-	bl int2string
-
-	ldr r0, ptr_to_trash
+	ldr r0, ptr_to_black
 	bl output_string
 
-	MOV r0, #0x3B
-	bl output_character
+	MOV r0, #2			;x coordinate static
+	SUB r8, r5, #2		;increment 2 up  for cyan  (empty space)
+	MOV r1, r8			;y coordinate dynamic
+	bl moveCursor
 
-	ldr r0, ptr_to_ballflagX
-	ldr r1, [r0]
-
-	;bl output_character
-
-	ldr r0, ptr_to_trash
-
-	bl int2string
-
-	ldr r0, ptr_to_trash
+	ldr r0, ptr_to_paddleLeft
 	bl output_string
 
-	MOV r0, #0x48
-	bl output_character
+	;INCRMENET FLAG LEFT PADDLE UP
+	ADD r5, r5, #-1
+	STR r5, [r4]
 
 
 
@@ -536,6 +611,8 @@ moveCursor:
 
 
 
+
+endmovePaddle:
 	POP {r4-r12,lr}
 	MOV pc, lr
 	.end
