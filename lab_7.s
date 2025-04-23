@@ -91,6 +91,7 @@ ptr_to_yellow:			.word yellow
 ptr_to_ballflagX:		.word ballflagX
 ptr_to_ballflagY:		.word ballflagY
 ptr_to_BDFlagX:			.word BDFlagX
+ptr_to_BDFlagY:			.word BDFlagY
 ptr_to_paddleLeft:		.word paddleLeft
 ptr_to_paddleRight:		.word paddleRight
 ptr_to_trash:			.word trash
@@ -146,7 +147,7 @@ Infin:
 	ldr r0, ptr_to_black
 	bl output_string
 
-	bl moveBall
+l	bl moveBall
 
 	ldr r0, ptr_to_ballflagX
 	ldr r0, [r0]
@@ -588,6 +589,15 @@ moveBall:
 	ldr r6, ptr_to_BDFlagX ;address to x direction (r6)
 	ldr r7, [r6]
 
+	;load the y direction (r12)
+	ldr r11, ptr_to_BDFlagY
+	ldr r12, [r11]
+
+	;get the y coordinate (r9)
+	ldr r10, ptr_to_ballflagY
+	ldr r9, [r10]
+
+
 
     ;where is the ball located (determines which collisions we check)
 	CMP r5, #80  ;check collision with right paddle
@@ -614,18 +624,15 @@ checkRightPaddleCollision:
     ldr r8, ptr_to_PaddlePosR
     ldr r8, [r8]
 
-    ;get the y coordinate (r9)
-	ldr r9, ptr_to_ballflagY
-	ldr r9, [r9]
 
     ;check if ball hit the middle of of paddle
     CMP r9, r8  ;did we hit middle of paddle?
     BEQ ccRight1
-    SUB r10, r8, #1 ;did we hit top of paddle
-    CMP r9, r10
+    SUB r8, r8, #1 ;did we hit top of paddle
+    CMP r9, r8
     BEQ ccRight2
-    ADD r10, r8, #1 ;did we hit bottom of paddle
-    CMP r9, r10
+    ADD r8, r8, #2 ;did we hit bottom of paddle
+    CMP r9, r8
     BEQ ccRight3
     B NoXEdgeCases ;we did not hit paddle
 
@@ -633,18 +640,22 @@ checkRightPaddleCollision:
 ccRight1:
     MOV r7, #-1
     str r7, [r6]
+    MOV r12, #0
+    str r12, [r11]
     B endMoveBall
 ccRight2:
     MOV r7, #-1
     str r7, [r6]
 
-    MOV r11, #-1
+    MOV r12, #-1
+    str r12, [r11]
     B endMoveBall
 ccRight3:
     MOV r7, #-1
     str r7, [r6]
 
-    MOV r11, #1
+    MOV r12, #1
+    str r12, [r11]
     B endMoveBall
 
 
@@ -654,8 +665,11 @@ ccRight3:
 
 NoXEdgeCases:
     ;NO SPECIAL EDGE CASES, HANDLE REGULAR MOVEMENT AS NORMAL
-    ADD r8, r5, r7		; Move the ball to the right
+    ADD r8, r5, r7		; Move the ball x direction
 	STR r8, [r4]
+
+	ADD r8, r9, r12		; Move the ball y direction
+	str r8, [r10]
 	b endMoveBall
 
 
