@@ -67,6 +67,8 @@ PDFlagL:		.word 0x0
 PDFlagR:	.word 0x0
 PLscore:	.word 0x0
 PRscore:	.word 0x0
+GameState:	.word 0x0
+PaddleHitCount: .word 0x0
 
 
 	.text
@@ -104,6 +106,8 @@ ptr_to_PDFlagL:			.word PDFlagL
 ptr_to_PDFlagR:			.word PDFlagR
 ptr_to_PLscore:			.word PLscore
 ptr_to_PRscore:			.word PRscore
+ptr_to_GameState:		.word GameState
+ptr_to_PaddleHitCount:	.word PaddleHitCount
 
 
 lab7:				; This is your main routine which is called from
@@ -112,10 +116,19 @@ lab7:				; This is your main routine which is called from
 
  	bl uart_init
 	bl uart_interrupt_init
+
+	MOV r0, #0x2355
+	MOVT r0, #0x0008
 	bl gpio_interrupt_init
 
 
 	bl print_board
+
+
+	ldr r0, ptr_to_GameState
+	MOV r1, #1							;Change the game state flag to 1 (Game is running)
+	str r1, [r0]
+
 
 
 
@@ -140,29 +153,7 @@ Infin:
 
 	;ldr r0, ptr_to_ball
 	;bl output_string
-	bl movePaddle
 
-	ldr r0, ptr_to_ballflagX
-	ldr r0, [r0]
-	ldr r1, ptr_to_ballflagY
-	ldr r1, [r1]
-
-	bl moveCursor
-
-	ldr r0, ptr_to_black
-	bl output_string
-
-	bl moveBall
-
-	ldr r0, ptr_to_ballflagX
-	ldr r0, [r0]
-	ldr r1, ptr_to_ballflagY
-	ldr r1, [r1]
-
-	bl moveCursor
-
-	ldr r0, ptr_to_ball
-	bl output_string
 
 
 
@@ -221,6 +212,8 @@ uart_interrupt_init:
 
 
 gpio_interrupt_init:
+	PUSH {r4-r12,lr}
+	MOV r4, r0
 
 	;Init for Tiva Functions (Port F)
 
@@ -308,6 +301,7 @@ gpio_interrupt_init:
 
     STR r1, [r0,#0x100]
 
+
     ;Connect Clock to timer
     MOV r0, #0xE000
     MOVT r0, #0x400F
@@ -352,10 +346,10 @@ gpio_interrupt_init:
 
     LDR r1, [r0, #0x028]
 
-    MOV r1, #0x2400
-    MOVT r1, #0x00F4
+   ; MOV r1, #0x2355
+    ;MOVT r1, #0x0008    ;MAKE THIS DYNAMIC
 
-	STR r1, [r0, #0x028]
+	STR r4, [r0, #0x028]  ;make this dynamic
 
     ;Enable timer to interrupt processor
 	MOV r0, #0x0000
@@ -386,6 +380,11 @@ gpio_interrupt_init:
     ORR r1, r1, #0x1
 
     STR r1, [r0, #0xC]
+
+
+
+
+    POP  {r4-r12,lr}
 
 	MOV pc, lr
 
@@ -483,13 +482,39 @@ Timer_Handler:
 
 	STRB r1, [r0, #0x24]
 
+	ldr r0, ptr_to_GameState
+	ldr r1, [r0]
 
-	;This is a test
-	;;bl moveBall
+	CMP r1, #1
+	BNE EndTimer
+
+	bl movePaddle
+
+	ldr r0, ptr_to_ballflagX
+	ldr r0, [r0]
+	ldr r1, ptr_to_ballflagY
+	ldr r1, [r1]
+
+	bl moveCursor
+
+	ldr r0, ptr_to_black
+	bl output_string
+
+	bl moveBall
+
+	ldr r0, ptr_to_ballflagX
+	ldr r0, [r0]
+	ldr r1, ptr_to_ballflagY
+	ldr r1, [r1]
+
+	bl moveCursor
+
+	ldr r0, ptr_to_ball
+	bl output_string
 
 
 
-
+EndTimer:
 
 	POP {r4-r12,lr}
 	BX lr       	; Return
@@ -698,6 +723,7 @@ ccRight1:
     str r7, [r6]	;set x to left
     MOV r12, #0
     str r12, [r11]	;set y to 0
+    bl dynamic_Timer
     B endMoveBall
 ;hit top of right paddle
 ccRight2:
@@ -706,6 +732,7 @@ ccRight2:
 
     MOV r12, #-1
     str r12, [r11]	;set y to up
+    bl dynamic_Timer
     B endMoveBall
 ;hit bottom of right paddle
 ccRight3:
@@ -714,6 +741,7 @@ ccRight3:
 
     MOV r12, #1
     str r12, [r11]	;set y to down
+    bl dynamic_Timer
     B endMoveBall
 
 checkLeftPaddleCollision:
@@ -745,6 +773,7 @@ ccLeft1:
     str r7, [r6] ;set x to right
     MOV r12, #0
     str r12, [r11] ;set y to 0
+    bl dynamic_Timer
     B endMoveBall
 ;hit top of left paddle
 ccLeft2:
@@ -753,6 +782,7 @@ ccLeft2:
 
     MOV r12, #-1
     str r12, [r11] ; set y to up
+    bl dynamic_Timer
     B endMoveBall
 ;hit bottom of left paddle
 ccLeft3:
@@ -761,6 +791,7 @@ ccLeft3:
 
     MOV r12, #1
     str r12, [r11]	;set y to down
+    bl dynamic_Timer
     B endMoveBall
 
 
@@ -1101,6 +1132,90 @@ rightPaddleDown:
 endmovePaddle:
 	POP {r4-r12,lr}
 	MOV pc, lr
+
+
+
+
+
+dynamic_Timer:
+	PUSH {r4-r12,lr}
+	;get paddle hits
+	ldr r2, ptr_to_PaddleHitCount	;address in r2
+	ldr r3, [r2]					;count in r3
+
+	ADD r3,r3,#1			;add count by 1 (function is called once per ball hit)
+
+	str r3, [r2]
+
+
+
+	cmp r3, #1
+	BEQ dt1
+	cmp r3, #2
+	BEQ dt2
+	cmp r3, #3
+	BEQ dt3
+	cmp r3, #4
+	BEQ dt4
+	cmp r3, #5
+	BEQ dt5
+	cmp r3, #6
+	BEQ dt6
+	B end_Dynamic_Timer
+	;B end_Dynamic_Timer
+
+
+;35 FPS
+dt1:
+	MOV r0, #0xF9B6
+    MOVT r0, #0x0006
+    bl gpio_interrupt_init
+    B end_Dynamic_Timer
+
+;40 fps
+dt2:
+	MOV r0, #0x1A80
+    MOVT r0, #0x0006
+    bl gpio_interrupt_init
+    B end_Dynamic_Timer
+
+;45 fps
+dt3:
+	MOV r0, #0x6CE3
+    MOVT r0, #0x0005
+    bl gpio_interrupt_init
+    B end_Dynamic_Timer
+
+;50 fps
+dt4:
+	MOV r0, #0xE200
+    MOVT r0, #0x0004
+    bl gpio_interrupt_init
+    B end_Dynamic_Timer
+;55fps
+dt5:
+	MOV r0, #0x705D
+    MOVT r0, #0x0004
+    bl gpio_interrupt_init
+    B end_Dynamic_Timer
+;60fps
+dt6:
+	MOV r0, #0x11AA
+    MOVT r0, #0x0004
+    bl gpio_interrupt_init
+    B end_Dynamic_Timer
+
+
+
+end_Dynamic_Timer:
+
+
+	POP {r4-r12,lr}
+	MOV pc, lr
+
+
+
+
 
 
 	.end
