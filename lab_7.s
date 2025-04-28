@@ -2,6 +2,9 @@
 	.data
 	.global board
 	.global trash
+	.global pause
+	.global winningScore
+	.global GameState
 
 
 
@@ -9,8 +12,7 @@
 
 board:
         .string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-        .string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-        ;I ADDED THE TOP 2 LINES TO SIMULATE THE UPPER 2 LINES WHERE THE SCORES ARE, THEY WILL HAVE TO BE EDITED LATER FOR ACCURACY!!!
+        .string "/????????0?????????????????????????????????????????????????????????????0?????????/", 0xA, 0xD
 
 
 		.string "/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/", 0xA, 0xD
@@ -21,12 +23,12 @@ board:
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/$???????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/$???????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/$???????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-		.string "/???????????????????????????????????????????????????????????????????????????????#/", 0xA, 0xD
-		.string "/?????????????????????????????????????????*?????????????????????????????????????#/", 0xA, 0xD
-		.string "/???????????????????????????????????????????????????????????????????????????????#/", 0xA, 0xD
+		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
+		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
+		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
+		.string "/$??????????????????????????????????????????????????????????????????????????????#/", 0xA, 0xD
+		.string "/$???????????????????????????????????????*??????????????????????????????????????#/", 0xA, 0xD
+		.string "/$??????????????????????????????????????????????????????????????????????????????#/", 0xA, 0xD
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
 		.string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
@@ -61,7 +63,7 @@ ballflagX: .word	0x2A
 ballflagY: .word	0xF
 BDFlagX:		.word 0x1
 BDFlagY:		.word 0x0
-PaddlePosL:	.word 0xC
+PaddlePosL:	.word 0xF
 PaddlePosR:	.word 0xF
 PDFlagL:		.word 0x0
 PDFlagR:	.word 0x0
@@ -69,6 +71,20 @@ PLscore:	.word 0x0
 PRscore:	.word 0x0
 GameState:	.word 0x0
 PaddleHitCount: .word 0x0
+pause:		.word 0x0
+winningScore:	.word 0x0
+rightWinMessage: 	.string 27, "[40mGame Over! Right Player Won!", 0xA, 0xD
+					.string "Hit 'Y' to Play Again!", 0xA, 0xD
+					.string "Hit any other button to quit!",0x0
+leftWinMessage: 	.string 27, "[40mGame Over! Left Player Won!", 0xA, 0xD
+					.string "Hit 'Y' to Play Again!", 0xA, 0xD
+					.string "Hit any other button to quit!",0x0
+getScoreMessage: 	.string 27, "[40mWhat is Winning Score for Game?", 0xA, 0xD
+				 	.string "sw5 == 7", 0xA, 0xD
+				 	.string "sw4 == 9", 0xA, 0xD
+				 	.string "sw3 == 11", 0xA, 0xD
+				 	.string "sw2 == infinite freeplay", 0xA, 0xD, 0x0
+
 
 
 	.text
@@ -85,6 +101,10 @@ PaddleHitCount: .word 0x0
 	.global uart_init		; This is from your Lab #4 Library
 	.global int2string
 	.global lab7
+	.global simplified_read_push_btns
+	.global read_from_push_btns
+	.global illuminate_LEDs
+	.global gpio_btn_and_LED_init
 
 ptr_to_ball:			.word ball
 ptr_to_board:			.word board
@@ -108,83 +128,118 @@ ptr_to_PLscore:			.word PLscore
 ptr_to_PRscore:			.word PRscore
 ptr_to_GameState:		.word GameState
 ptr_to_PaddleHitCount:	.word PaddleHitCount
+ptr_to_pause:			.word pause
+ptr_to_winningScore:	.word winningScore
+ptr_to_rightWinMessage:	.word rightWinMessage
+ptr_to_leftWinMessage:	.word leftWinMessage
+ptr_to_getScoreMessage:	.word getScoreMessage
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+lab7:
 
-lab7:				; This is your main routine which is called from
-				; your C wrapper.
 	PUSH {r4-r12,lr}   	; Preserve registers to adhere to the AAPCS
-
+	;init everything
  	bl uart_init
 	bl uart_interrupt_init
+	bl gpio_btn_and_LED_init
 
+StartGameMain:
 	MOV r0, #0x2355
 	MOVT r0, #0x0008
 	bl gpio_interrupt_init
 
-
+	;get winning score
+	Mov r0, #0xC
+	bl output_character 	;clear screen
+	ldr r0, ptr_to_getScoreMessage
+	bl output_string	;prompt for score
+	bl WinningScore		;get score
+	;print whole board to start
+	MOV r0, #0xC
+	bl output_character
 	bl print_board
 
-
+	;start game officially
 	ldr r0, ptr_to_GameState
 	MOV r1, #1							;Change the game state flag to 1 (Game is running)
 	str r1, [r0]
 
-
-
-
-
-	;MOV r0, #1
-	;MOV r1, #1
-	;bl moveCursor
-	;ldr r0, ptr_to_cyan
-	;bl output_string
-
-
-
+	;wait for winner
 Infin:
-	;bl movePaddle
-	;bl moveCursor
-
-	;ldr r0, ptr_to_black
-	;bl output_string
-
-	;bl moveBall
-	;bl moveCursor
-
-	;ldr r0, ptr_to_ball
-	;bl output_string
-
-
-
-
-
-
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
+	CMP r5, #2
+	BEQ RightWonGame
+	CMP r5, #3
+	BEQ LeftWonGame
 	B Infin
 
 
+RightWonGame:
+	MOV r0, #0xC
+	bl output_character
+	ldr r0, ptr_to_rightWinMessage
+	bl output_string
+	;set ball x direction (should already be set)
+	;ldr r0, ptr_to_BDFlagX
+	;MOV r1, #-1				;set ball to go left
+	;str r1, [r0]
+	B PlayAgain
 
+LeftWonGame:
+	MOV r0, #0xC
+	bl output_character
+	ldr r0, ptr_to_leftWinMessage
+	bl output_string
+	;set ball x direction (should already be set)
+	;ldr r0, ptr_to_BDFlagX
+	;MOV r1, #1				;set ball to go right
+	;str r1, [r0]
+	B PlayAgain
 
+PlayAgain:
+	;reset everything to be able to play again
+	;set ball y direction (should already be set)
+	;ldr r0, ptr_to_BDFlagY
+	;MOV r1, #0				;no y movement
+	;str r1, [r0]
+	;set paddle position left
+	ldr r0, ptr_to_PaddlePosL
+	MOV r1, #0xF
+	str r1, [r0]
+	; set paddle position right
+	ldr r0, ptr_to_PaddlePosR
+	MOV r1, #0xF
+	str r1, [r0]
+	;left player score PLscore
+	ldr r0, ptr_to_PLscore
+	MOV r1, #0x0
+	str r1, [r0]
+	;right player score PLscore
+	ldr r0, ptr_to_PRscore
+	MOV r1, #0x0
+	str r1, [r0]
+	;paddle hit count (for fps)
+	ldr r0, ptr_to_PaddleHitCount
+	MOV r1, #0x0
+	str r1, [r0]
 
+	;check for play again (0) or quit (4)
+	ldr r0, ptr_to_GameState
+	ldr r0, [r0]
+	CMP r0, #0
+	BEQ StartGameMain
+	CMP r0, #4
+	BEQ endOfMain
+	B PlayAgain
 
-
-
-
-
-;Infin:
-	;bl print_board
-	;MOV r0, #0xC
-	;bl output_character
-	;B Infin
-
-
-	; This is where you should implement a loop, waiting for the user to
-	; indicate if they want to end the program.
+endOfMain:
 
 	POP {r4-r12,lr}		; Restore registers to adhere to the AAPCS
 	MOV pc, lr
 
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 uart_interrupt_init:
 
 	; Your code to initialize the UART0 interrupt goes here
@@ -210,7 +265,7 @@ uart_interrupt_init:
 
 	MOV pc, lr
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 gpio_interrupt_init:
 	PUSH {r4-r12,lr}
 	MOV r4, r0
@@ -246,9 +301,6 @@ gpio_interrupt_init:
     LDR r2, [r1, #0x510]
     ORR r2, r2, #0x10             ;sets 5th bit to 1 (Pin 4)
     STR r2, [r1, #0x510]
-
-
-
 
 
 
@@ -389,37 +441,58 @@ gpio_interrupt_init:
 	MOV pc, lr
 
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 UART0_Handler:
-
-	; Your code for your UART handler goes here.
-	; Remember to preserver registers r4-r12 by pushing then popping
-	; them to & from the stack at the beginning & end of the handler
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
-		;Clear the interrupt
+	;Clear the interrupt
     MOV r2, #0xC000
     MOVT r2, #0x4000
     LDR r3, [r2, #0x044]
-
     ORR r3, #0x10
-
     STR r3, [r2, #0x044]
 
-    bl simple_read_character
+	;read the character
+    bl simple_read_character ;character returned in r0
 
+	;if game paused, do nothing
+    ldr r6, ptr_to_pause		; check for pause, still in works
+    ldr r7, [r6]
+    CMP r7, #1
+    BEQ endUART
+    ;check game state
+	ldr r6, ptr_to_GameState
+	ldr r7, [r6]
+	CMP r7, #1			;if game is running then change paddle direction
+	BEQ uartHandlerGameRunning
+	CMP r7, #2			;if either right/left player won then set game state to continue/quit the game
+	BEQ uartHandlerPlayAgain
+	CMP r7, #3
+	BEQ uartHandlerPlayAgain
+	B endUART
+uartHandlerPlayAgain:
+	CMP r0, #'Y'
+	BEQ  uartContinueGame	;if user hit Y then continue game
+	;else user did not hit Y and we quit the game (move 4 into GameState)
+	MOV r7, #4
+	str r7, [r6]
+	B endUART
+
+uartContinueGame:	;move 0 into GameState
+	MOV r7, #0
+	str r7, [r6]
+	B endUART
+
+uartHandlerGameRunning:
+	;game is started, change the paddle directions
     CMP r0, #'q'
     BEQ LeftUp
-
     CMP r0, #'a'
     BEQ LeftDown
-
     CMP r0, #'o'
     BEQ RightUp
-
     CMP r0, #'l'
     BEQ RightDown
-
     B endUART
 
 LeftUp:
@@ -427,40 +500,62 @@ LeftUp:
 	MOV r5, #-1
 	str r5, [r4]
 	B endUART
-
 LeftDown:
 	ldr r4, ptr_to_PDFlagL
 	MOV r5, #1
 	str r5, [r4]
 	B endUART
-
 RightUp:
 	ldr r4, ptr_to_PDFlagR
 	MOV r5, #-1
 	str r5, [r4]
 	B endUART
-
 RightDown:
 	ldr r4, ptr_to_PDFlagR
 	MOV r5, #1
 	str r5, [r4]
 	B endUART
-
 endUART:
 	POP {r4-r12,lr} ; Spill registers to stack
-
 	BX lr       	; Return
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Switch_Handler:
 
 	; Your code for your UART handler goes here.
 	; Remember to preserver registers r4-r12 by pushing then popping
 	; them to & from the stack at the beginning & end of the handler
+	PUSH {r4-r12,lr} ; Spill registers to stack
 
+	; Your code for your UART handler goes here.
+	; Remember to preserver registers r4-r12 by pushing then popping
+	; them to & from the stack at the beginning & end of the handler
+
+	;Clear the interrupt
+	MOV r2, #0x5000
+    MOVT r2, #0x4002
+    LDR r3, [r2, #0x041C]
+
+    ORR r3, #0x10
+
+    STR r3, [r2, #0x041C]
+
+    ldr r4, ptr_to_pause	;load the flag
+
+    ldr r0, [r4]				; loads content into r0
+
+    EOR r0, r0, #0x1
+
+    STR r0, [r4]
+
+
+
+	POP {r4-r12,lr}   ; Restore registers from stack
 	BX lr       	; Return
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Timer_Handler:
 
 	; Your code for your Timer handler goes here.  It is not needed for
@@ -475,43 +570,44 @@ Timer_Handler:
 	;Clear interrupt
 	MOV r0, #0x0000
 	MOVT r0, #0x4003
-
 	LDRB r1, [r0, #0x24]
-
 	ORR r1, r1, #0x1
-
 	STRB r1, [r0, #0x24]
 
+	;check if game started,if not started then do nothing
 	ldr r0, ptr_to_GameState
 	ldr r1, [r0]
-
 	CMP r1, #1
 	BNE EndTimer
 
+	;check if game paused, if it is then do nothing
+	ldr r0, ptr_to_pause
+	ldr r1, [r0]
+	CMP r1, #1
+	BEQ EndTimer
+
+
+	;move paddle
 	bl movePaddle
 
+	;print new ball location (ie just move the ball)
 	ldr r0, ptr_to_ballflagX
 	ldr r0, [r0]
 	ldr r1, ptr_to_ballflagY
 	ldr r1, [r1]
-
-	bl moveCursor
-
+	bl moveCursor						;move the cursor to ball location
 	ldr r0, ptr_to_black
-	bl output_string
+	bl output_string					;print black to current ball location
 
-	bl moveBall
+	bl moveBall							;find new ball location
 
 	ldr r0, ptr_to_ballflagX
 	ldr r0, [r0]
 	ldr r1, ptr_to_ballflagY
 	ldr r1, [r1]
-
-	bl moveCursor
-
+	bl moveCursor						;move cursor to new ball location
 	ldr r0, ptr_to_ball
-	bl output_string
-
+	bl output_string					;print the color of the ball to new ball location
 
 
 EndTimer:
@@ -520,6 +616,7 @@ EndTimer:
 	BX lr       	; Return
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 simple_read_character:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
@@ -535,7 +632,7 @@ simple_read_character:
 
 
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 print_board:
 	PUSH {r4-r12,lr}   	; Preserve registers to adhere to the AAPCS
 
@@ -606,6 +703,7 @@ EndPrintBoard:
 	MOV pc, lr
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 moveBall:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
@@ -664,9 +762,9 @@ RightPoint:
 	MOV r1, #0xF
 	str r1, [r0]
 
-	;set default ball direction (right, no vertical motion )
-	MOV r7, #1
-	str r7, [r6]	;set x 1 (right)
+	;set default ball direction (left, no vertical motion )
+	MOV r7, #-1													;CHANGED TO SET X TO GO LEFT (ball is supposed to go oposite direction from winning point player)
+	str r7, [r6]	;set x -1 (left)
 	MOV r12, #0
 	str r12, [r11]	;set y 0 (none)
 
@@ -832,6 +930,7 @@ endMoveBall:
 	MOV pc, lr
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 scoring:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
@@ -894,11 +993,35 @@ scoreLeft:
 
 
 endScoring:
+	;see if anyone won?
+
+	ldr r0, ptr_to_winningScore		;get winning score (r0)
+	ldr r0, [r0]
+
+	ldr r1, ptr_to_PRscore			; load right player score (r1)
+	ldr r1, [r1]
+
+	ldr r2, ptr_to_GameState ;get game state flag  (r2)
+
+	;check right won?
+	CMP r0, r1
+	ITT EQ ;;;right player won
+	MOVEQ r4, #2		;game state flag is 2, right won!
+	strEQ r4, [r2]
+
+	;check left won?
+	ldr r1, ptr_to_PLscore			; load left player score (r1)
+	ldr r1, [r1]
+	CMP r0, r1
+	ITT EQ ;;;left player won
+	MOVEQ r4, #3		;game state flag is 3, right won!
+	strEQ r4, [r2]
 
 
 	POP {r4-r12,lr}
 	MOV pc, lr
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 moveCursor:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
@@ -948,7 +1071,8 @@ moveCursor:
 	POP {r4-r12,lr}
 	MOV pc, lr
 
-;this function assumes we're ONLY moving either LEFT OR RIGHT, NOT BOTH!!!!
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;this function will move both left and right paddle at the same time (does NOT account for penalties)
 movePaddle:
 	PUSH {r4-r12,lr} ; Spill registers to stack
 
@@ -1136,7 +1260,7 @@ endmovePaddle:
 
 
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 dynamic_Timer:
 	PUSH {r4-r12,lr}
 	;get paddle hits
@@ -1213,9 +1337,84 @@ end_Dynamic_Timer:
 	POP {r4-r12,lr}
 	MOV pc, lr
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+simplified_read_push_btns:
+    PUSH {r4-r12,lr} ; Spill registers to stack
+
+        ;r0- return value
+        ;r1- base address (port D)
+        ;r2- data register
+        ;r3 - masked data
+
+        ;bit 0 - s5             (r0 is 0x1)
+        ;bit 1 - s4             (r0 is 0x2)
+        ;bit 2 - s3             (r0 is 0x4)
+        ;bit 3 - s2             (r0 is 0x8)
+
+
+ 		MOV r0, #0 ;init return value to 0
+
+        MOV r1, #0x7000
+     	MOVT r1, #0x4000        ;Move base address for Port D in r1
+    	;Get Register which reads the buttons
+     	LDR r2, [r1, #0x3FC]    ;Puts the data from reg into r2
+
+    ;mask last 4 bits
+    AND r0, r2, #0xF
 
 
 
 
+	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WinningScore:
+	PUSH {r4-r12,lr} ; Spill registers to stack
+
+	ldr r4, ptr_to_winningScore
+
+
+Poll:
+	bl simplified_read_push_btns
+
+	CMP r0, #1     ; Compare r0 to the given score
+	BEQ Score7
+
+	CMP r0, #2
+	BEQ Score9
+
+	CMP r0, #4
+	BEQ Score11
+
+	CMP r0, #8
+	BEQ unlimited
+
+	B Poll
+
+Score7:
+	MOV r5, #7
+	str r5, [r4]
+	B endWinningScore
+
+Score9:
+	MOV r5, #9
+	str r5, [r4]
+	B endWinningScore
+
+Score11:
+	MOV r5, #11
+	str r5, [r4]
+	B endWinningScore
+
+unlimited:
+	MOV r5, #-1
+	str r5, [r4]
+
+
+
+endWinningScore:
+
+	POP {r4-r12,lr}   ; Restore registers from stack
+	MOV pc, lr
 
 	.end
