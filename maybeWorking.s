@@ -170,19 +170,29 @@ Infin:
 	ldr r5, [r4]					;actual game state (r5)
 	CMP r5, #2
 	BEQ RightWonGame
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
 	CMP r5, #3
 	BEQ LeftWonGame
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
 	CMP r5, #5
 	BEQ RightScoreRound
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
 	CMP r5, #6
 	BEQ LeftScoreRound
 	B Infin
 RightScoreRound:
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
 	CMP r5, #1
 	BEQ Infin
 	B RightScoreRound
 
 LeftScoreRound:
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
 	CMP r5, #1
 	BEQ Infin
 	B RightScoreRound
