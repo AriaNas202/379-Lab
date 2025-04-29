@@ -5,6 +5,7 @@
 	.global pause
 	.global winningScore
 	.global GameState
+	.global ball
 
 
 
@@ -12,7 +13,7 @@
 
 board:
         .string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-        .string "/????????0?????????????????????????????????????????????????????????????0?????????/", 0xA, 0xD
+        .string "/????????0????????????????????Time:?0??????????????????????????????????0?????????/", 0xA, 0xD
 
 
 		.string "/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/", 0xA, 0xD
@@ -84,7 +85,9 @@ getScoreMessage: 	.string 27, "[40mWhat is Winning Score for Game?", 0xA, 0xD
 				 	.string "sw4 == 9", 0xA, 0xD
 				 	.string "sw3 == 11", 0xA, 0xD
 				 	.string "sw2 == infinite freeplay", 0xA, 0xD, 0x0
-
+pauseScreenMessage:	.string  27, "[40mGame Paused! Hit sw1 Again to unpause! Hit 'r' to restart the game!",0x0
+clearMessage: 		.string 27, "[40m                                                                                   ",0x0
+gameTimer: 			.word 0x0
 
 
 	.text
@@ -133,6 +136,9 @@ ptr_to_winningScore:	.word winningScore
 ptr_to_rightWinMessage:	.word rightWinMessage
 ptr_to_leftWinMessage:	.word leftWinMessage
 ptr_to_getScoreMessage:	.word getScoreMessage
+ptr_to_pauseScreenMessage: .word pauseScreenMessage
+ptr_to_clearMessage: 		.word clearMessage
+ptr_to_gameTimer:  			.word gameTimer
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 lab7:
@@ -143,10 +149,75 @@ lab7:
 	bl uart_interrupt_init
 	bl gpio_btn_and_LED_init
 
+
+;temp test color
+;ahhhhh:
+;	MOV r0, #0x2355
+;	MOVT r0, #0x0008
+;	bl gpio_interrupt_init
+;	bl randomColor
+;	b ahhhhh
+
+
+
+
+
+
+
 StartGameMain:
+	;reset everything to be able to play again
+	;ball x coordinate
+	ldr r0, ptr_to_ballflagX
+	MOV r1, #0x2A
+	str r1, [r0]
+	;ball y coordinate
+	ldr r0, ptr_to_ballflagY
+	MOV r1, #0xF
+	str r1, [r0]
+
+
+
+
+	;set ball x direction
+	ldr r0, ptr_to_BDFlagX
+	MOV r1, #1				;right
+	str r1, [r0]
+	;set ball y direction
+	ldr r0, ptr_to_BDFlagY
+	MOV r1, #0				;no y movement
+	str r1, [r0]
+	;set paddle position left
+	ldr r0, ptr_to_PaddlePosL
+	MOV r1, #0xF
+	str r1, [r0]
+	; set paddle position right
+	ldr r0, ptr_to_PaddlePosR
+	MOV r1, #0xF
+	str r1, [r0]
+	;left player score PLscore
+	ldr r0, ptr_to_PLscore
+	MOV r1, #0x0
+	str r1, [r0]
+	;right player score PLscore
+	ldr r0, ptr_to_PRscore
+	MOV r1, #0x0
+	str r1, [r0]
+	;paddle hit count (for fps)
+	ldr r0, ptr_to_PaddleHitCount
+	MOV r1, #0x0
+	str r1, [r0]
+	;pause
+	ldr r0, ptr_to_pause
+	MOV r1, #0x0
+	str r1, [r0]
+
+	;reset gpio timer
 	MOV r0, #0x2355
 	MOVT r0, #0x0008
 	bl gpio_interrupt_init
+
+	;randomize colors
+	bl biggerRandomColor
 
 	;get winning score
 	Mov r0, #0xC
@@ -170,9 +241,36 @@ Infin:
 	ldr r5, [r4]					;actual game state (r5)
 	CMP r5, #2
 	BEQ RightWonGame
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
 	CMP r5, #3
 	BEQ LeftWonGame
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
+	CMP r5, #5
+	BEQ RightScoreRound
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
+	CMP r5, #6
+	BEQ LeftScoreRound
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
+	CMP r5, #0
+	BEQ StartGameMain
 	B Infin
+RightScoreRound:
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
+	CMP r5, #1
+	BEQ Infin
+	B RightScoreRound
+
+LeftScoreRound:
+	ldr r4, ptr_to_GameState		;game state address (r4)
+	ldr r5, [r4]					;actual game state (r5)
+	CMP r5, #1
+	BEQ Infin
+	B RightScoreRound
 
 
 RightWonGame:
@@ -198,32 +296,6 @@ LeftWonGame:
 	B PlayAgain
 
 PlayAgain:
-	;reset everything to be able to play again
-	;set ball y direction (should already be set)
-	;ldr r0, ptr_to_BDFlagY
-	;MOV r1, #0				;no y movement
-	;str r1, [r0]
-	;set paddle position left
-	ldr r0, ptr_to_PaddlePosL
-	MOV r1, #0xF
-	str r1, [r0]
-	; set paddle position right
-	ldr r0, ptr_to_PaddlePosR
-	MOV r1, #0xF
-	str r1, [r0]
-	;left player score PLscore
-	ldr r0, ptr_to_PLscore
-	MOV r1, #0x0
-	str r1, [r0]
-	;right player score PLscore
-	ldr r0, ptr_to_PRscore
-	MOV r1, #0x0
-	str r1, [r0]
-	;paddle hit count (for fps)
-	ldr r0, ptr_to_PaddleHitCount
-	MOV r1, #0x0
-	str r1, [r0]
-
 	;check for play again (0) or quit (4)
 	ldr r0, ptr_to_GameState
 	ldr r0, [r0]
@@ -459,7 +531,8 @@ UART0_Handler:
     ldr r6, ptr_to_pause		; check for pause, still in works
     ldr r7, [r6]
     CMP r7, #1
-    BEQ endUART
+    BEQ uartPauseHandling
+
     ;check game state
 	ldr r6, ptr_to_GameState
 	ldr r7, [r6]
@@ -469,7 +542,27 @@ UART0_Handler:
 	BEQ uartHandlerPlayAgain
 	CMP r7, #3
 	BEQ uartHandlerPlayAgain
+	CMP r7, #5
+	BEQ uartStartOfRound
+	CMP r7, #6
+	BEQ uartStartOfRound
 	B endUART
+
+uartPauseHandling:
+	ldr r6, ptr_to_GameState
+	ldr r7, [r6]
+	CMP r0, #'r'
+	BNE endUART
+	MOV r7, #0
+	str r7, [r6]
+	B endUART
+
+
+uartStartOfRound:
+	MOV r7, #1
+	str r7, [r6]
+	B endUART
+
 uartHandlerPlayAgain:
 	CMP r0, #'Y'
 	BEQ  uartContinueGame	;if user hit Y then continue game
@@ -536,20 +629,39 @@ Switch_Handler:
 	MOV r2, #0x5000
     MOVT r2, #0x4002
     LDR r3, [r2, #0x041C]
-
     ORR r3, #0x10
-
     STR r3, [r2, #0x041C]
 
+    ;only pause game if GameState 1
+    ldr r0, ptr_to_GameState
+	ldr r0, [r0]
+	CMP r0, #1
+	BNE endSwitchHandler
+
+
+	;flips the pause flag
     ldr r4, ptr_to_pause	;load the flag
+    ldr r5, [r4]				; loads content into r0
+    EOR r5, r5, #0x1
+    STR r5, [r4]
 
-    ldr r0, [r4]				; loads content into r0
+    ;print appropriate message
+    MOV r0, #2
+    MOV r1, #29
+    bl moveCursor
 
-    EOR r0, r0, #0x1
+    ;get address into r0 (of message)
+    CMP r5, #0 ;game not paused
+    ITE EQ
+    ldrEQ r0, ptr_to_clearMessage
+    ldrNE r0, ptr_to_pauseScreenMessage
 
-    STR r0, [r4]
+    bl output_string
 
 
+
+
+endSwitchHandler:
 
 	POP {r4-r12,lr}   ; Restore registers from stack
 	BX lr       	; Return
@@ -585,6 +697,29 @@ Timer_Handler:
 	ldr r1, [r0]
 	CMP r1, #1
 	BEQ EndTimer
+
+	;handle game time (on top of the screen)
+	MOV r0, #37
+	MOV r1, #2
+	bl moveCursor		;move cursor to game timer
+
+	ldr r2, ptr_to_gameTimer
+	ldr r1, [r2]
+	add r1,r1,#1
+	str r1, [r2]			;increment timer
+
+
+	ldr r0, ptr_to_trash
+	mov r2,#35
+	UDIV r1, r1, r2
+
+	bl int2string			;turn int into string for timer
+
+	ldr r0, ptr_to_trash
+	bl output_string			;print timer
+
+
+
 
 
 	;move paddle
@@ -767,6 +902,7 @@ RightPoint:
 	str r7, [r6]	;set x -1 (left)
 	MOV r12, #0
 	str r12, [r11]	;set y 0 (none)
+
 
     B endMoveBall ; no weird edge cases for x, skipp all edge cases for X
 
@@ -963,6 +1099,12 @@ scoreRight:
 
 	ldr r0, ptr_to_trash
 	bl output_string				; print score
+
+
+	;change game state flag to 6 (end of round, right scored)
+	ldr r0, ptr_to_GameState
+	MOV r1, #6
+	str r1, [r0]
 	B endScoring
 
 scoreLeft:
@@ -986,6 +1128,11 @@ scoreLeft:
 
 	ldr r0, ptr_to_trash
 	bl output_string				; print score
+
+	;change game state flag to 5 (end of round, left  scored)
+	ldr r0, ptr_to_GameState
+	MOV r1, #5
+	str r1, [r0]
 	B endScoring
 
 
@@ -1416,5 +1563,121 @@ endWinningScore:
 
 	POP {r4-r12,lr}   ; Restore registers from stack
 	MOV pc, lr
+
+randomColor:
+	PUSH {r4-r12,lr}
+
+	;get timer value
+	MOV r0, #0
+	MOVT r0, #0x4003
+	ldr r1, [r0,#0x50]
+
+
+	;Modulo by 6
+	MOV r6, #6
+    UDIV r2,r1, r6          ;r2=r1/6
+    MUL r2, r2, r6         ; r2=r2*6
+    SUB r0, r1, r2          ; r2=r1-r2 (stored in r0 )
+
+
+
+	POP {r4-r12,lr}
+	MOV pc, lr
+
+
+
+biggerRandomColor:
+	PUSH {r4-r12,lr}
+
+	;get color 1 (r10)
+	bl randomColor
+	MOV r10, r0
+
+	;get color 2
+getColor2:
+	bl randomColor
+	MOV r11, r0
+
+	CMP r11, r10
+	BEQ getColor2	;color 2 not same as color 1
+
+	;get color 3
+getColor3:
+	bl randomColor
+	MOV r12, r0
+
+	CMP r12, r10
+	BEQ getColor3 ;color 3 not same as color 1
+	CMP r12, r11
+	BEQ getColor3 ;color 3 not same as color 2
+
+
+
+	;change color of ball/paddle based on colors
+
+	;ball as color 1 (r10)
+	ldr r0, ptr_to_ball	;get ball pointer (r0)
+	Add r0,r0, #3 ;increment ball ptr to right address
+
+	;set ansi escape sequence (r1)
+	cmp r10, #0
+	IT EQ
+	movEQ r1, #'1'
+	cmp r10, #1
+	IT EQ
+	movEQ r1, #'4'
+	cmp r10, #2
+	IT EQ
+	movEQ r1, #'6'
+	cmp r10, #3
+	IT EQ
+	movEQ r1, #'2'
+	cmp r10, #4
+	IT EQ
+	movEQ r1, #'3'
+	cmp r10, #5
+	IT EQ
+	movEQ r1, #'7'
+
+	strb r1, [r0]
+
+
+	;left Paddle as color 2 (r11)
+	ldr r0, ptr_to_paddleLeft	;get ball pointer (r0)
+	Add r0,r0, #3 ;increment ball ptr to right address
+
+	;set ansi escape sequence (r1)
+	cmp r11, #0
+	IT EQ
+	movEQ r1, #'1'
+	cmp r11, #1
+	IT EQ
+	movEQ r1, #'4'
+	cmp r11, #2
+	IT EQ
+	movEQ r1, #'6'
+	cmp r11, #3
+	IT EQ
+	movEQ r1, #'2'
+	cmp r11, #4
+	IT EQ
+	movEQ r1, #'3'
+	cmp r11, #5
+	IT EQ
+	movEQ r1, #'7'
+
+	strb r1, [r0]
+
+
+
+
+	POP {r4-r12,lr}
+	MOV pc, lr
+
+
+
+
+
+
 
 	.end
