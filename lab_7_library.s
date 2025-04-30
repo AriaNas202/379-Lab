@@ -419,12 +419,12 @@ illuminate_RGB_LED:
     ;r3 - trash
 
     ;Red    1    (pin 1)
-    ;Blue   2    (pin 2)
-    ;Green  3    (pin 3)
-    ;Purple 4    (pin 1 and 2) (Red and Blue)
-    ;Yellow 5    (Pin 1 and 3) (Green and Red)
-    ;White  6    (All Pins) (Red, Blue, Green)
-    ;OFF 7 (ALL PINS OFF)
+    ;Blue   4    (pin 2)
+    ;Green  2    (pin 3)
+    ;Purple 5    (pin 1 and 2) (Red and Blue)
+    ;Yellow 3    (Pin 1 and 3) (Green and Red)
+    ;White  7    (All Pins) (Red, Blue, Green)
+    ;OFF 8 (ALL PINS OFF)
 
 
 
@@ -436,15 +436,15 @@ illuminate_RGB_LED:
     ;Figure out what color the light is supposed to be
     CMP r0, #1
     BEQ Red     ;If red branch to red
-    CMP r0, #2
-    BEQ Blue    ;If blue branch to blue
-    CMP r0, #3
-    BEQ Green   ;If hreen branch to green
     CMP r0, #4
-    BEQ Purple  ;If purple branch to purple
+    BEQ Blue    ;If blue branch to blue
+    CMP r0, #2
+    BEQ Green   ;If hreen branch to green
     CMP r0, #5
+    BEQ Purple  ;If purple branch to purple
+    CMP r0, #3
     BEQ Yellow  ;If yellow branch to yellow
-    CMP r0, #6
+    CMP r0, #7
     BEQ White  ;If white branch to white
 
     B LEDOff     ;None of the other colors were right, so it must be OFF
