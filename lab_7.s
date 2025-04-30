@@ -8,6 +8,7 @@
 	.global ball
 	.global paddleLeft
 	.global paddleRight
+	.global PDFlagR
 
 
 
@@ -90,6 +91,7 @@ getScoreMessage: 	.string 27, "[40mWhat is Winning Score for Game?", 0xA, 0xD
 pauseScreenMessage:	.string  27, "[40mGame Paused! Hit sw1 Again to unpause! Hit 'r' to restart the game!",0x0
 clearMessage: 		.string 27, "[40m                                                                                   ",0x0
 gameTimer: 			.word 0x0
+timerDividend:		.word 0x23
 
 
 	.text
@@ -142,6 +144,7 @@ ptr_to_getScoreMessage:	.word getScoreMessage
 ptr_to_pauseScreenMessage: .word pauseScreenMessage
 ptr_to_clearMessage: 		.word clearMessage
 ptr_to_gameTimer:  			.word gameTimer
+ptr_to_timerDividend:		.word timerDividend
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 lab7:
@@ -527,7 +530,7 @@ UART0_Handler:
 	;read the character
     bl simple_read_character ;character returned in r0
 
-	;if game paused, do nothing
+	;if game paused, restart
     ldr r6, ptr_to_pause		; check for pause, still in works
     ldr r7, [r6]
     CMP r7, #1
@@ -698,6 +701,14 @@ Timer_Handler:
 	CMP r1, #1
 	BEQ EndTimer
 
+	;check for penalties
+	bl checkPenalty
+	ldr r0, ptr_to_GameState	;if there was a penalty then GameState shouldnt be 1 anymore (so skip the rest)
+	ldr r1, [r0]
+	CMP r1, #1
+	BNE EndTimer
+
+
 	;handle game time (on top of the screen)
 	MOV r0, #37
 	MOV r1, #2
@@ -709,11 +720,14 @@ Timer_Handler:
 	ldr r2, ptr_to_gameTimer
 	ldr r1, [r2]
 	add r1,r1,#1
-	str r1, [r2]			;increment timer    ahhhhhhhhhhhh
+	str r1, [r2]			;increment timer
 
+
+	ldr r4, ptr_to_timerDividend
+	ldr r5, [r4]
 
 	ldr r0, ptr_to_trash
-	mov r2,#35    ;;make this dynamic 
+	mov r2, r5    ;;make this dynamic
 	UDIV r1, r1, r2
 
 	bl int2string			;turn int into string for timer
@@ -1079,7 +1093,7 @@ scoring:
 
 	CMP r0, #81
 	BEQ scoreLeft
-	B endScoring
+	B end
 
 scoreRight:
 	ldr r4, ptr_to_PRscore			; load right player score
@@ -1117,7 +1131,7 @@ scoreRight:
 	bl illuminate_RGB_LED    ;light up light
 
 
-	B endScoring
+	B end
 
 scoreLeft:
 	ldr r4, ptr_to_PLscore
@@ -1151,13 +1165,13 @@ scoreLeft:
 	sub r0,r0,#0x30
 	bl illuminate_RGB_LED    ;light up light
 
-	B endScoring
+	B end
 
 
 
 
 
-endScoring:
+end:
 	;see if anyone won?
 
 	ldr r0, ptr_to_winningScore		;get winning score (r0)
@@ -1431,6 +1445,7 @@ dynamic_Timer:
 	;get paddle hits
 	ldr r2, ptr_to_PaddleHitCount	;address in r2
 	ldr r3, [r2]					;count in r3
+	ldr r4, ptr_to_timerDividend
 
 	ADD r3,r3,#1			;add count by 1 (function is called once per ball hit)
 
@@ -1459,6 +1474,10 @@ dt1:
 	MOV r0, #0xF9B6
     MOVT r0, #0x0006
     bl gpio_interrupt_init
+
+    MOV r5, #40			;40
+    STR r5, [r4]
+
     B end_Dynamic_Timer
 
 ;40 fps
@@ -1466,6 +1485,10 @@ dt2:
 	MOV r0, #0x1A80
     MOVT r0, #0x0006
     bl gpio_interrupt_init
+
+    MOV r5, #46			;46
+    STR r5, [r4]
+
     B end_Dynamic_Timer
 
 ;45 fps
@@ -1473,6 +1496,10 @@ dt3:
 	MOV r0, #0x6CE3
     MOVT r0, #0x0005
     bl gpio_interrupt_init
+
+    MOV r5, #51			;51
+    STR r5, [r4]
+
     B end_Dynamic_Timer
 
 ;50 fps
@@ -1480,17 +1507,29 @@ dt4:
 	MOV r0, #0xE200
     MOVT r0, #0x0004
     bl gpio_interrupt_init
+
+    MOV r5, #57				;57
+    STR r5, [r4]
+
     B end_Dynamic_Timer
 ;55fps
 dt5:
 	MOV r0, #0x705D
     MOVT r0, #0x0004
     bl gpio_interrupt_init
+
+    MOV r5, #63					;63
+    STR r5, [r4]
+
     B end_Dynamic_Timer
 ;60fps
 dt6:
 	MOV r0, #0x11AA
     MOVT r0, #0x0004
+
+    MOV r5, #70						;70
+    STR r5, [r4]
+
     bl gpio_interrupt_init
     B end_Dynamic_Timer
 
@@ -1765,6 +1804,158 @@ dance4:
 
 	mov r0, #0
 	bl illuminate_LEDs
+
+	POP {r4-r12,lr}
+	MOV pc, lr
+
+
+checkPenalty:
+	PUSH {r4-r12,lr}
+
+	; load X ball direction and both paddle directions
+	ldr r4, ptr_to_BDFlagX		;address of ball direction (r4)
+	ldr r5, [r4]				;ball direction (r5)
+
+	ldr r6, ptr_to_PDFlagL		;address to left paddle (r6)
+	ldr r7, [r6]				;left paddle (r7)
+
+	ldr r8, ptr_to_PDFlagR		;address to right paddle (r8)
+	ldr r9, [r8]				;right paddle (r9)
+
+	;check ball direction
+	CMP r5, #-1
+	BEQ checkRpenalty
+	CMP r5, #1
+	BEQ checkLpenalty
+	B endCheckPenalty
+
+checkRpenalty:
+	CMP r9, #0
+	BEQ endCheckPenalty ;check for penalty (paddle movement)
+	;there is a penalty!!!!
+	;give left player point
+	mov r0, #27
+	bl output_character
+	mov r0, #'['
+	bl output_character
+	mov r0, #'4'
+	bl output_character
+	mov r0, #'0'
+	bl output_character
+	mov r0, #'m'
+	bl output_character
+	MOV r0, #81
+	bl scoring
+
+	;deduct right player's point (and print) (skipped if at 0)
+	ldr r10, ptr_to_PRscore			; load right player score (address r10, score r11)
+	ldr r11, [r10]
+	cmp r11, #0   					;set min score limit to 0
+	BEQ penaltyResetBoard
+	SUB r11, r11, #1					; sub right player score
+	str r11, [r10]						;store score back
+	;move cursor to score position
+	MOV r0, #72
+	MOV r1, #2
+	bl moveCursor
+	; convert score to string and print
+	ldr r0, ptr_to_trash
+	MOV r1, r11
+	bl int2string
+	ldr r0, ptr_to_trash
+	bl output_string
+
+	;print black space (in case of stray number)
+	ldr r0, ptr_to_black
+	bl output_string
+
+	B penaltyResetBoard
+
+
+checkLpenalty:
+	CMP r7, #0
+	BEQ endCheckPenalty ;check for penalty (paddle movement)
+	;there is a penalty!!!!
+	;give left player point
+	mov r0, #27
+	bl output_character
+	mov r0, #'['
+	bl output_character
+	mov r0, #'4'
+	bl output_character
+	mov r0, #'0'
+	bl output_character
+	mov r0, #'m'
+	bl output_character
+	MOV r0, #2
+	bl scoring
+
+	;deduct left player's point (and print) (skipped if at 0)
+	ldr r10, ptr_to_PLscore			; load left player score (address r10, score r11)
+	ldr r11, [r10]
+	cmp r11, #0   					;set min score limit to 0
+	BEQ penaltyResetBoard
+	SUB r11, r11, #1					; sub right player score
+	str r11, [r10]						;store score back
+	;move cursor to score position
+	MOV r0, #10
+	MOV r1, #2
+	bl moveCursor
+	; convert score to string and print
+	ldr r0, ptr_to_trash
+	MOV r1, r11
+	bl int2string
+	ldr r0, ptr_to_trash
+	bl output_string
+	;print black space (in case of stray number)
+	ldr r0, ptr_to_black
+	bl output_string
+
+
+penaltyResetBoard:
+	;RESET BOARD!!!!!!!!!
+	;black out old ball location
+	ldr r0, ptr_to_ballflagX
+	ldr r0, [r0]
+	ldr r1, ptr_to_ballflagY
+	ldr r1, [r1]
+	bl moveCursor						;move the cursor to ball location
+	ldr r0, ptr_to_black
+	bl output_string					;print black to current ball location
+
+	;set ball back to default position
+	ldr r0, ptr_to_ballflagX
+	MOV r1, #0x2A
+	str r1, [r0]
+	ldr r0, ptr_to_ballflagY
+	MOV r1, #0xF
+	str r1, [r0]
+
+	;set default ball direction (right, no vertical motion )
+	ldr r0, ptr_to_BDFlagX
+	MOV r1, #1
+	str r1, [r0]	;set x 1 (right)
+	ldr r0, ptr_to_BDFlagY
+	MOV r0, #0
+	str r0, [r1]	;set y 0 (none)
+
+	;print new ball location
+	ldr r0, ptr_to_ballflagX
+	ldr r0, [r0]
+	ldr r1, ptr_to_ballflagY
+	ldr r1, [r1]
+	bl moveCursor						;move cursor to new ball location
+	ldr r0, ptr_to_ball
+	bl output_string					;print the color of the ball to new ball location
+
+	;set default paddle direction
+	ldr r0, ptr_to_PDFlagL
+	MOV r1, #0
+	str r1, [r0]	;set left paddle no movement
+	ldr r0, ptr_to_PDFlagR
+	MOV r1, #0
+	str r1, [r0]	;set left paddle no movement
+endCheckPenalty:
 
 	POP {r4-r12,lr}
 	MOV pc, lr
