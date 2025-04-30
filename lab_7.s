@@ -6,6 +6,8 @@
 	.global winningScore
 	.global GameState
 	.global ball
+	.global paddleLeft
+	.global paddleRight
 
 
 
@@ -13,7 +15,7 @@
 
 board:
         .string "/????????????????????????????????????????????????????????????????????????????????/", 0xA, 0xD
-        .string "/????????0????????????????????Time:?0??????????????????????????????????0?????????/", 0xA, 0xD
+        .string "/????????0????????????????????Time:??0?????????????????????????????????0?????????/", 0xA, 0xD
 
 
 		.string "/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/", 0xA, 0xD
@@ -108,6 +110,7 @@ gameTimer: 			.word 0x0
 	.global read_from_push_btns
 	.global illuminate_LEDs
 	.global gpio_btn_and_LED_init
+	.global illuminate_RGB_LED
 
 ptr_to_ball:			.word ball
 ptr_to_board:			.word board
@@ -150,19 +153,6 @@ lab7:
 	bl gpio_btn_and_LED_init
 
 
-;temp test color
-;ahhhhh:
-;	MOV r0, #0x2355
-;	MOVT r0, #0x0008
-;	bl gpio_interrupt_init
-;	bl randomColor
-;	b ahhhhh
-
-
-
-
-
-
 
 StartGameMain:
 	;reset everything to be able to play again
@@ -174,10 +164,6 @@ StartGameMain:
 	ldr r0, ptr_to_ballflagY
 	MOV r1, #0xF
 	str r1, [r0]
-
-
-
-
 	;set ball x direction
 	ldr r0, ptr_to_BDFlagX
 	MOV r1, #1				;right
@@ -210,14 +196,20 @@ StartGameMain:
 	ldr r0, ptr_to_pause
 	MOV r1, #0x0
 	str r1, [r0]
+	;game time
+	ldr r0, ptr_to_gameTimer
+	MOV r1, #0x0
+	str r1, [r0]
+	;rbg light
+	MOV r0, #8
+	bl illuminate_RGB_LED    ;light up light
+
 
 	;reset gpio timer
 	MOV r0, #0x2355
 	MOVT r0, #0x0008
 	bl gpio_interrupt_init
 
-	;randomize colors
-	bl biggerRandomColor
 
 	;get winning score
 	Mov r0, #0xC
@@ -225,6 +217,10 @@ StartGameMain:
 	ldr r0, ptr_to_getScoreMessage
 	bl output_string	;prompt for score
 	bl WinningScore		;get score
+
+	;randomize colors
+	bl biggerRandomColor
+
 	;print whole board to start
 	MOV r0, #0xC
 	bl output_character
@@ -278,6 +274,8 @@ RightWonGame:
 	bl output_character
 	ldr r0, ptr_to_rightWinMessage
 	bl output_string
+	;make led dance
+	bl LEDdance
 	;set ball x direction (should already be set)
 	;ldr r0, ptr_to_BDFlagX
 	;MOV r1, #-1				;set ball to go left
@@ -289,6 +287,8 @@ LeftWonGame:
 	bl output_character
 	ldr r0, ptr_to_leftWinMessage
 	bl output_string
+	;make led dance
+	bl LEDdance
 	;set ball x direction (should already be set)
 	;ldr r0, ptr_to_BDFlagX
 	;MOV r1, #1				;set ball to go right
@@ -703,14 +703,17 @@ Timer_Handler:
 	MOV r1, #2
 	bl moveCursor		;move cursor to game timer
 
+	ldr r0, ptr_to_black ;print background black
+	bl output_string
+
 	ldr r2, ptr_to_gameTimer
 	ldr r1, [r2]
 	add r1,r1,#1
-	str r1, [r2]			;increment timer
+	str r1, [r2]			;increment timer    ahhhhhhhhhhhh
 
 
 	ldr r0, ptr_to_trash
-	mov r2,#35
+	mov r2,#35    ;;make this dynamic 
 	UDIV r1, r1, r2
 
 	bl int2string			;turn int into string for timer
@@ -808,13 +811,13 @@ PrintBlack:
 	B GetBoardChar
 
 PrintWhite:
-	ldr r0, ptr_to_white
+	ldr r0, ptr_to_paddleLeft
 	bl output_string
 	ADD r4,r4,#1
 	B GetBoardChar
 
 PrintCyan:
-	ldr r0, ptr_to_cyan
+	ldr r0, ptr_to_paddleRight
 	bl output_string
 	ADD r4,r4,#1
 	B GetBoardChar
@@ -1105,6 +1108,15 @@ scoreRight:
 	ldr r0, ptr_to_GameState
 	MOV r1, #6
 	str r1, [r0]
+
+	;change LED to winner
+	ldr r0, ptr_to_paddleRight;get led code
+	add r0,r0, #3
+	ldrb r0,[r0]
+	sub r0,r0,#0x30
+	bl illuminate_RGB_LED    ;light up light
+
+
 	B endScoring
 
 scoreLeft:
@@ -1124,8 +1136,6 @@ scoreLeft:
 	MOV r1, r5
 	bl int2string					; convert score to string and move cursor
 
-
-
 	ldr r0, ptr_to_trash
 	bl output_string				; print score
 
@@ -1133,6 +1143,14 @@ scoreLeft:
 	ldr r0, ptr_to_GameState
 	MOV r1, #5
 	str r1, [r0]
+
+	;change LED to winner
+	ldr r0, ptr_to_paddleLeft ;get led code
+	add r0,r0, #3
+	ldrb r0,[r0]
+	sub r0,r0,#0x30
+	bl illuminate_RGB_LED    ;light up light
+
 	B endScoring
 
 
@@ -1628,10 +1646,10 @@ getColor3:
 	movEQ r1, #'4'
 	cmp r10, #2
 	IT EQ
-	movEQ r1, #'6'
+	movEQ r1, #'2'
 	cmp r10, #3
 	IT EQ
-	movEQ r1, #'2'
+	movEQ r1, #'5'
 	cmp r10, #4
 	IT EQ
 	movEQ r1, #'3'
@@ -1655,14 +1673,40 @@ getColor3:
 	movEQ r1, #'4'
 	cmp r11, #2
 	IT EQ
-	movEQ r1, #'6'
+	movEQ r1, #'2'
 	cmp r11, #3
 	IT EQ
-	movEQ r1, #'2'
+	movEQ r1, #'5'
 	cmp r11, #4
 	IT EQ
 	movEQ r1, #'3'
 	cmp r11, #5
+	IT EQ
+	movEQ r1, #'7'
+
+	strb r1, [r0]
+
+	;right Paddle as color 3 (r12)
+	ldr r0, ptr_to_paddleRight	;get ball pointer (r0)
+	Add r0,r0, #3 ;increment ball ptr to right address
+
+	;set ansi escape sequence (r1)
+	cmp r12, #0
+	IT EQ
+	movEQ r1, #'1'
+	cmp r12, #1
+	IT EQ
+	movEQ r1, #'4'
+	cmp r12, #2
+	IT EQ
+	movEQ r1, #'2'
+	cmp r12, #3
+	IT EQ
+	movEQ r1, #'5'
+	cmp r12, #4
+	IT EQ
+	movEQ r1, #'3'
+	cmp r12, #5
 	IT EQ
 	movEQ r1, #'7'
 
@@ -1674,10 +1718,55 @@ getColor3:
 	POP {r4-r12,lr}
 	MOV pc, lr
 
+LEDdance:
+	PUSH {r4-r12,lr}
+
+	; r0 - bit pattern of the lights
+	mov r12, #0
+	mov r9, #0x1111
+	movt r9, #0x0001
+
+danceStart:
+	mov r4, #0
+	mov r5, #0
+	mov r6, #0
+	mov r7, #0
 
 
+dance1:
+	MOV r0, #8
+	bl illuminate_LEDs
+	add r4, r4, #1
+	cmp r4, r9
+	bne dance1
+dance2:
+	MOV r0, #4
+	bl illuminate_LEDs
+	add r5, r5, #1
+	cmp r5, r9
+	bne dance2
+dance3:
+	MOV r0, #2
+	bl illuminate_LEDs
+	add r6, r6, #1
+	cmp r6, r9
+	bne dance3
+dance4:
+	MOV r0, #1
+	bl illuminate_LEDs
+	add r7, r7, #1
+	cmp r7, r9
+	bne dance4
 
+	;do dance again
+	add r12, r12, #1
+	cmp r12, #6
+	bne danceStart
 
+	mov r0, #0
+	bl illuminate_LEDs
 
+	POP {r4-r12,lr}
+	MOV pc, lr
 
 	.end
