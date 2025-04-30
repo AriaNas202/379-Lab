@@ -1446,6 +1446,8 @@ dynamic_Timer:
 	ldr r2, ptr_to_PaddleHitCount	;address in r2
 	ldr r3, [r2]					;count in r3
 	ldr r4, ptr_to_timerDividend
+	ldr r11, ptr_to_gameTimer	;game timer address (r11)
+	ldr r12, [r11]				;game timer (r12)
 
 	ADD r3,r3,#1			;add count by 1 (function is called once per ball hit)
 
@@ -1477,6 +1479,12 @@ dt1:
 
     MOV r5, #40			;40
     STR r5, [r4]
+    ;set the quotient (prevents weird blips in time)
+    mov r7, #23
+    udiv r6, r12, r7
+    mov r7, #40
+    mul r6, r6, r7
+    str r6, [r11]
 
     B end_Dynamic_Timer
 
@@ -1484,10 +1492,18 @@ dt1:
 dt2:
 	MOV r0, #0x1A80
     MOVT r0, #0x0006
-    bl gpio_interrupt_init
+    bl gpio_interrupt_init ;set interrupt to happen faster
 
     MOV r5, #46			;46
-    STR r5, [r4]
+    STR r5, [r4]		;set the dividend dynamically
+
+    ;set the quotient (prevents weird blips in time)
+    mov r7, #40
+    udiv r6, r12, r7
+    mov r7, #46
+    mul r6, r6, r7
+    str r6, [r11]
+
 
     B end_Dynamic_Timer
 
@@ -1499,6 +1515,13 @@ dt3:
 
     MOV r5, #51			;51
     STR r5, [r4]
+    ;set the quotient (prevents weird blips in time)
+    mov r7, #46
+    udiv r6, r12, r7
+    mov r7, #51
+    mul r6, r6, r7
+    str r6, [r11]
+
 
     B end_Dynamic_Timer
 
@@ -1510,6 +1533,12 @@ dt4:
 
     MOV r5, #57				;57
     STR r5, [r4]
+    ;set the quotient (prevents weird blips in time)
+    mov r7, #51
+    udiv r6, r12, r7
+    mov r7, #57
+    mul r6, r6, r7
+    str r6, [r11]
 
     B end_Dynamic_Timer
 ;55fps
@@ -1520,17 +1549,32 @@ dt5:
 
     MOV r5, #63					;63
     STR r5, [r4]
+    ;set the quotient (prevents weird blips in time)
+    mov r7, #57
+    udiv r6, r12, r7
+    mov r7, #63
+    mul r6, r6, r7
+    str r6, [r11]
+
 
     B end_Dynamic_Timer
 ;60fps
 dt6:
 	MOV r0, #0x11AA
     MOVT r0, #0x0004
+    bl gpio_interrupt_init
 
     MOV r5, #70						;70
     STR r5, [r4]
+    ;set the quotient (prevents weird blips in time)
+    mov r7, #63
+    udiv r6, r12, r7
+    mov r7, #70
+    mul r6, r6, r7
+    str r6, [r11]
 
-    bl gpio_interrupt_init
+
+
     B end_Dynamic_Timer
 
 
@@ -1869,7 +1913,9 @@ checkRpenalty:
 	ldr r0, ptr_to_black
 	bl output_string
 
+
 	B penaltyResetBoard
+
 
 
 checkLpenalty:
@@ -1912,6 +1958,7 @@ checkLpenalty:
 	bl output_string
 
 
+
 penaltyResetBoard:
 	;RESET BOARD!!!!!!!!!
 	;black out old ball location
@@ -1936,8 +1983,8 @@ penaltyResetBoard:
 	MOV r1, #1
 	str r1, [r0]	;set x 1 (right)
 	ldr r0, ptr_to_BDFlagY
-	MOV r0, #0
-	str r0, [r1]	;set y 0 (none)
+	MOV r1, #0
+	str r1, [r0]	;set y 0 (none)
 
 	;print new ball location
 	ldr r0, ptr_to_ballflagX
